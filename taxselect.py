@@ -175,7 +175,7 @@ def info(msg):
 def sel_most_geo_div_taxon(label_ind_pairs, loc_list, sp_by_name):
     md = None
     md_loc = None
-    md_sp = None
+    md_sp_ind = None
     for label, ind in label_ind_pairs:
         sp = sp_by_name[label]
         for l1 in sp.locations:
@@ -251,10 +251,10 @@ def greedy_mmd(tree, num_taxa, sp_by_name):
                 continue
             row = pdm[row_ind]
             inc_dist = [row[i] for i in sel_inds]
+            assert inc_dist
             curr_min_dist = min(inc_dist)
             if curr_min_dist > max_min_dist:
                 max_min_dist = curr_min_dist
-                mmd_ind = row_ind
                 mmd_ind_set = set()
                 mmd_ind_set.add(row_ind)
             elif abs(curr_min_dist - max_min_dist) < TOL:
@@ -263,7 +263,7 @@ def greedy_mmd(tree, num_taxa, sp_by_name):
         mmd_ind, sel_loc = sel_most_geo_div_taxon(tied_tax, curr_locs, sp_by_name)
         ntl = taxa_label_list[mmd_ind]
         debug(
-            f'    taxon {1 + len(sel_inds)} = "{ntl}" with MD = {curr_min_dist} set = {mmd_ind_set}'
+            f'    taxon {1 + len(sel_inds)} = "{ntl}" with MD = {max_min_dist} set = {mmd_ind_set}'
         )
         sel_tax_labels.append(ntl)
         sel_inds.add(mmd_ind)
@@ -272,7 +272,9 @@ def greedy_mmd(tree, num_taxa, sp_by_name):
     return sel_tax_labels
 
 
-def prune_taxa_without_sp_data(tree, sp_w_data):
+def prune_taxa_without_sp_data(
+    tree, sp_w_data, upham_to_iucn=None, name_mapping_fp="", centroid_fp=""
+):
     taxa_list = [i for i in tree.taxon_namespace]
     to_prune = []
     sp_pat = re.compile("^([A-Z][a-z]+ +[-a-z0-9]+) [A-Z][A-Za-z]+ [A-Z]+$")
@@ -280,9 +282,7 @@ def prune_taxa_without_sp_data(tree, sp_w_data):
         m = sp_pat.match(i.label)
         if not m:
             to_prune.append(i)
-            info(
-                f'Will prune "{i.label}". did not match species name pattern {name_mapping_fp}'
-            )
+            info(f'Will prune "{i.label}". did not match species name pattern')
             continue
         sp_name = m.group(1)
         if upham_to_iucn is not None:
@@ -312,7 +312,13 @@ def main(country_name_fp, centroid_fp, name_mapping_fp, tree_fp, num_to_select):
         upham_to_iucn = None
     sp_by_name = read_centroids(centroid_fp, countries)
     tree = dendropy.Tree.get(path=tree_fp, schema="nexus")
-    prune_taxa_without_sp_data(tree, frozenset(sp_by_name.keys()))
+    prune_taxa_without_sp_data(
+        tree,
+        frozenset(sp_by_name.keys()),
+        upham_to_iucn=upham_to_iucn,
+        name_mapping_fp=name_mapping_fp,
+        centroid_fp=centroid_fp,
+    )
     sel = greedy_mmd(tree, num_to_select, sp_by_name)
     print("Selected:\n  {}\n".format("\n  ".join(sel)))
     return
