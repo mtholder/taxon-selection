@@ -3,6 +3,7 @@ import dendropy
 import csv
 import sys
 import re
+import os
 from geopy.distance import geodesic
 from dendropy.calculate.phylogeneticdistance import PhylogeneticDistanceMatrix
 
@@ -215,6 +216,19 @@ def tip_to_root_dist(nd, root):
     return t
 
 
+def ultrametric_greedy_mmd(tree, num_taxa, sp_by_name):
+    tree.calc_node_ages(ultrametricity_precision=5e-5)
+    for nd in tree.ageorder_node_iter(descending=True):
+        if nd.is_leaf():
+            print(f"{nd.taxon.label} -> root = ", tip_to_root_dist(nd, tree.seed_node))
+        else:
+            print(
+                f"internal node at age {nd.age} and tip to root =",
+                tip_to_root_dist(nd, tree.seed_node),
+            )
+    sys.exit("early\n")
+
+
 def greedy_mmd(tree, num_taxa, sp_by_name):
     """Selects `num_taxa` from the tips of `tree`.
 
@@ -331,11 +345,6 @@ def main(country_name_fp, centroid_fp, name_mapping_fp, tree_fp, num_to_select):
     sp_by_name = read_centroids(centroid_fp, countries)
     tree = dendropy.Tree.get(path=tree_fp, schema="nexus")
 
-    # Debugging code
-    # for nd in tree.leaf_nodes():
-    #     print(f"{nd.taxon.label} -> root = ", tip_to_root_dist(nd, tree.seed_node))
-    # sys.exit('early\n')
-
     prune_taxa_without_sp_data(
         tree,
         frozenset(sp_by_name.keys()),
@@ -343,7 +352,11 @@ def main(country_name_fp, centroid_fp, name_mapping_fp, tree_fp, num_to_select):
         name_mapping_fp=name_mapping_fp,
         centroid_fp=centroid_fp,
     )
-    sel = greedy_mmd(tree, num_to_select, sp_by_name)
+    using_ultrametricity = bool(os.environ.get("ULTRAMETRIC_FLAG", False))
+    if using_ultrametricity:
+        sel = ultrametric_greedy_mmd(tree, num_to_select, sp_by_name)
+    else:
+        sel = greedy_mmd(tree, num_to_select, sp_by_name)
     print("Selected:\n  {}\n".format("\n  ".join(sel)))
     return
 
