@@ -218,29 +218,28 @@ def tip_to_root_dist(nd, root):
 
 def ultrametric_greedy_mmd(tree, num_taxa, sp_by_name):
     tree.calc_node_ages(ultrametricity_precision=5e-5)
+    # for nd in tree.ageorder_node_iter(descending=True):
+    #     if nd.is_leaf():
+    #         print(f"{nd.taxon.label} -> root = ", tip_to_root_dist(nd, tree.seed_node))
+    #     else:
+    #         print(
+    #             f"internal node at age {nd.age} and tip to root =",
+    #             tip_to_root_dist(nd, tree.seed_node),
+    #         )
+    last_added = set([tree.seed_node])
+    chosen_ancs = set(last_added)
     for nd in tree.ageorder_node_iter(descending=True):
-        if nd.is_leaf():
-            print(f"{nd.taxon.label} -> root = ", tip_to_root_dist(nd, tree.seed_node))
-        else:
-            print(
-                f"internal node at age {nd.age} and tip to root =",
-                tip_to_root_dist(nd, tree.seed_node),
-            )
-    chosen_ancs = set()
-    for nd in tree.ageorder_node_iter(descending=True):
-        if len(chosen_ancs) == num_taxa:
+        if len(chosen_ancs) >= num_taxa:
             break
         if nd.is_leaf():
             raise NotImplementedError(
                 "num_taxa is greater than the number of internal nodes. Not implemented yet."
             )
-        if not chosen_ancs:
-            chosen_ancs.add(nd)
-        else:
-            par = nd.parent_node
-            if par in chosen_ancs:
-                chosen_ancs.remove(par)
-            chosen_ancs.add(nd)
+        assert nd in chosen_ancs
+        chosen_ancs.remove(nd)
+        last_added = set(nd.child_nodes())
+        chosen_ancs.update(last_added)
+    print(len(chosen_ancs), "chosen_ancs")
     for nd in chosen_ancs:
         t2rd = tip_to_root_dist(nd, tree.seed_node)
         print(f"internal node at age {nd.age} and tip to root = {t2rd}")
