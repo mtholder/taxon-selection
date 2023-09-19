@@ -83,7 +83,7 @@ def read_centroids_sans_countries(centroid_fp):
                 continue
             sp_name, longitude, latitude = row
             if longitude == "NA" or latitude == "NA":
-                sys.stderr.write(f'Skipping taxon "{sp_name}" due to NA in centroid.\n')
+                info(f'Skipping taxon "{sp_name}" due to NA in centroid.')
                 continue
             loc = Loc(latitude, longitude)
             this_loc = NamedLoc(name=None, c_id=None, loc=loc)
@@ -168,8 +168,11 @@ def debug(m):
         sys.stderr.write(f"greedy_mmd debug: {m}\n")
 
 
+def info(msg):
+    sys.stderr.write(f"{msg}\n")
+
+
 def sel_most_geo_div_taxon(label_ind_pairs, loc_list, sp_by_name):
-    # sys.stderr.write('passed in loc_list = {}\n'.format(loc_list))
     md = None
     md_loc = None
     md_sp = None
@@ -181,10 +184,6 @@ def sel_most_geo_div_taxon(label_ind_pairs, loc_list, sp_by_name):
                 try:
                     sum_sq_dist += calc_dist(l1, l2)
                 except:
-                    # sys.stderr.write('sp.__dict__ = {}\n'.format(sp.__dict__))
-                    # sys.stderr.write('loc_list = {}\n'.format(loc_list))
-                    # sys.stderr.write('l1 = {}\n'.format(l1))
-                    # sys.stderr.write('l2 = {}\n'.format(l2))
                     raise
             if md is None or sum_sq_dist > md:
                 md = sum_sq_dist
@@ -273,6 +272,34 @@ def greedy_mmd(tree, num_taxa, sp_by_name):
     return sel_tax_labels
 
 
+def prune_taxa_without_sp_data(tree, sp_w_data):
+    taxa_list = [i for i in tree.taxon_namespace]
+    to_prune = []
+    sp_pat = re.compile("^([A-Z][a-z]+ +[-a-z0-9]+) [A-Z][A-Za-z]+ [A-Z]+$")
+    for n, i in enumerate(taxa_list):
+        m = sp_pat.match(i.label)
+        if not m:
+            to_prune.append(i)
+            info(
+                f'Will prune "{i.label}". did not match species name pattern {name_mapping_fp}'
+            )
+            continue
+        sp_name = m.group(1)
+        if upham_to_iucn is not None:
+            final_name = upham_to_iucn.get(sp_name)
+        else:
+            final_name = sp_name
+        if final_name is None:
+            to_prune.append(i)
+            info(f'Will prune "{sp_name}" not found in {name_mapping_fp}')
+        elif final_name not in sp_w_data:
+            to_prune.append(i)
+            info(f"Will prune sp_name not found in {centroid_fp}")
+        else:
+            i.label = final_name
+    tree.prune_taxa(to_prune)
+
+
 def main(country_name_fp, centroid_fp, name_mapping_fp, tree_fp, num_to_select):
     if country_name_fp is not None:
         countries = read_country_names(country_name_fp)
@@ -285,37 +312,7 @@ def main(country_name_fp, centroid_fp, name_mapping_fp, tree_fp, num_to_select):
         upham_to_iucn = None
     sp_by_name = read_centroids(centroid_fp, countries)
     tree = dendropy.Tree.get(path=tree_fp, schema="nexus")
-    taxa_list = [i for i in tree.taxon_namespace]
-    to_prune = []
-    sp_pat = re.compile("^([A-Z][a-z]+ +[-a-z0-9]+) [A-Z][A-Za-z]+ [A-Z]+$")
-    for n, i in enumerate(taxa_list):
-        m = sp_pat.match(i.label)
-        if not m:
-            to_prune.append(i)
-            sys.stderr.write(
-                'Will prune "{}". did not match species name pattern\n'.format(
-                    i.label, name_mapping_fp
-                )
-            )
-            continue
-        sp_name = m.group(1)
-        if upham_to_iucn is not None:
-            final_name = upham_to_iucn.get(sp_name)
-        else:
-            final_name = sp_name
-        if final_name is None:
-            to_prune.append(i)
-            sys.stderr.write(
-                'Will prune "{}" not found in {}\n'.format(sp_name, name_mapping_fp)
-            )
-        elif final_name not in sp_by_name:
-            to_prune.append(i)
-            sys.stderr.write(
-                'Will prune "{}" not found in {}\n'.format(sp_name, centroid_fp)
-            )
-        else:
-            i.label = final_name
-    tree.prune_taxa(to_prune)
+    prune_taxa_without_sp_data(tree, frozenset(sp_by_name.keys()))
     sel = greedy_mmd(tree, num_to_select, sp_by_name)
     print("Selected:\n  {}\n".format("\n  ".join(sel)))
     return
