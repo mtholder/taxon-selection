@@ -206,7 +206,21 @@ def most_divergent_locs(tax_1, tax_2, sp_by_name):
     return md_pair
 
 
+def tip_to_root_dist(nd, root):
+    t = 0.0
+    while nd is not root:
+        t += nd.edge_length
+        nd = nd.parent_node
+        assert nd is not None
+    return t
+
+
 def greedy_mmd(tree, num_taxa, sp_by_name):
+    """Selects `num_taxa` from the tips of `tree`.
+
+    `sp_by_name` should be a dict mapping a name to Species object.
+    Every tip label in the tree must be in sp_by_name
+    """
     # not efficiently updating min dist yet
     taxa_list = [i.taxon for i in tree.leaf_nodes()]
     taxa_label_list = [i.label for i in taxa_list]
@@ -216,6 +230,9 @@ def greedy_mmd(tree, num_taxa, sp_by_name):
         raise ValueError("num_taxa exceeds the number of taxa in the tree")
     debug(f"Calculating patristic distance matrix")
     pdmc = PhylogeneticDistanceMatrix.from_tree(tree)
+    # Making a shallow copy of the distance matrix here. just being lazy...
+    # While copying, find the pair of taxa with the largest patristic distance.
+    # TODO: this does not consider ties in the largest distance
     pdm = []
     max_dist = None
     max_dist_inds = None
@@ -226,11 +243,11 @@ def greedy_mmd(tree, num_taxa, sp_by_name):
         if row_ind % 100 == 0:
             debug(f"  row {row_ind}")
         for col_ind, col_tax in enumerate(taxa_list):
-            nd = pdmc.patristic_distance(row_tax, col_tax)
-            if max_dist is None or nd > max_dist:
-                max_dist = nd
+            ndist = pdmc.patristic_distance(row_tax, col_tax)
+            if max_dist is None or ndist > max_dist:
+                max_dist = ndist
                 max_dist_inds = (row_ind, col_ind)
-            row.append(nd)
+            row.append(ndist)
         pdm.append(row)
     sel_tax_labels = [
         taxa_label_list[max_dist_inds[0]],
@@ -240,6 +257,7 @@ def greedy_mmd(tree, num_taxa, sp_by_name):
     debug(f'Most divergent 2 taxa are "{sel_tax_labels}" with dist= {max_dist}')
     tax_1, tax_2 = taxa_list[max_dist_inds[0]], taxa_list[max_dist_inds[1]]
     loc1, loc2 = most_divergent_locs(tax_1.label, tax_2.label, sp_by_name)
+
     TOL = 1.0e-5
     curr_locs = [loc1, loc2]
     while len(sel_inds) < num_taxa:
@@ -312,6 +330,12 @@ def main(country_name_fp, centroid_fp, name_mapping_fp, tree_fp, num_to_select):
         upham_to_iucn = None
     sp_by_name = read_centroids(centroid_fp, countries)
     tree = dendropy.Tree.get(path=tree_fp, schema="nexus")
+
+    # Debugging code
+    # for nd in tree.leaf_nodes():
+    #     print(f"{nd.taxon.label} -> root = ", tip_to_root_dist(nd, tree.seed_node))
+    # sys.exit('early\n')
+
     prune_taxa_without_sp_data(
         tree,
         frozenset(sp_by_name.keys()),
