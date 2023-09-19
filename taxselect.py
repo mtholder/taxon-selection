@@ -226,6 +226,24 @@ def ultrametric_greedy_mmd(tree, num_taxa, sp_by_name):
                 f"internal node at age {nd.age} and tip to root =",
                 tip_to_root_dist(nd, tree.seed_node),
             )
+    chosen_ancs = set()
+    for nd in tree.ageorder_node_iter(descending=True):
+        if len(chosen_ancs) == num_taxa:
+            break
+        if nd.is_leaf():
+            raise NotImplementedError(
+                "num_taxa is greater than the number of internal nodes. Not implemented yet."
+            )
+        if not chosen_ancs:
+            chosen_ancs.add(nd)
+        else:
+            par = nd.parent_node
+            if par in chosen_ancs:
+                chosen_ancs.remove(par)
+            chosen_ancs.add(nd)
+    for nd in chosen_ancs:
+        t2rd = tip_to_root_dist(nd, tree.seed_node)
+        print(f"internal node at age {nd.age} and tip to root = {t2rd}")
     sys.exit("early\n")
 
 
