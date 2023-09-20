@@ -246,7 +246,11 @@ def ultrametric_greedy_mmd(tree, num_taxa, sp_by_name):
 
     for nd in chosen_ancs:
         t2rd = tip_to_root_dist(nd, tree.seed_node)
-        print(f"internal node at age {nd.age} and tip to root = {t2rd}")
+        leaves_below = list(nd.leaf_nodes())
+        f, l = leaves_below[0].taxon.label, leaves_below[-1].taxon.label
+        print(
+            f"internal node at age {nd.age} and tip to root = {t2rd} with {len(leaves_below)} leaves below: {f} ... {l}"
+        )
     sys.exit("early\n")
 
 
