@@ -239,7 +239,11 @@ def ultrametric_greedy_mmd(tree, num_taxa, sp_by_name):
         chosen_ancs.remove(nd)
         last_added = set(nd.child_nodes())
         chosen_ancs.update(last_added)
-    print(len(chosen_ancs), "chosen_ancs")
+    if len(chosen_ancs) != num_taxa:
+        raise NotImplementedError(
+            "Polytomy caused num_taxa to be exceeded need to check last_added and remove some..."
+        )
+
     for nd in chosen_ancs:
         t2rd = tip_to_root_dist(nd, tree.seed_node)
         print(f"internal node at age {nd.age} and tip to root = {t2rd}")
