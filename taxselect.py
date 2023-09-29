@@ -358,7 +358,14 @@ def prune_taxa_without_sp_data(
     tree.prune_taxa(to_prune)
 
 
-def run(country_name_fp, centroid_fp, name_mapping_fp, tree_fp, num_to_select):
+def run(
+    country_name_fp,
+    centroid_fp,
+    name_mapping_fp,
+    tree_fp,
+    num_to_select,
+    use_ultrametricity=True,
+):
     if country_name_fp is not None:
         countries = read_country_names(country_name_fp)
         countries = frozenset(countries)
@@ -378,8 +385,7 @@ def run(country_name_fp, centroid_fp, name_mapping_fp, tree_fp, num_to_select):
         name_mapping_fp=name_mapping_fp,
         centroid_fp=centroid_fp,
     )
-    using_ultrametricity = bool(os.environ.get("ULTRAMETRIC_FLAG", False))
-    if using_ultrametricity:
+    if use_ultrametricity:
         sel = ultrametric_greedy_mmd(tree, num_to_select, sp_by_name)
     else:
         sel = greedy_mmd(tree, num_to_select, sp_by_name)
@@ -422,6 +428,14 @@ def main():
     parser.add_argument(
         "--num-to-select", default=2, type=int, help="the number of taxa to select"
     )
+    parser.add_argument(
+        "--use-patristic-distance-matrices",
+        default=False,
+        action="store_true",
+        help="Developer option for switching between algorithms. "
+        "Note that all input trees must be ultrametric, but some algorithms "
+        "exploit this more effectively. Using these flags turns off these algorithms",
+    )
     args = parser.parse_args(sys.argv[1:])
     if args.name_mapping_file is None:
         if args.country_file is not None:
@@ -435,6 +449,7 @@ def main():
         tree_fp=args.tree_file,
         name_mapping_fp=args.name_mapping_file,
         num_to_select=args.num_to_select,
+        use_ultrametricity=not args.use_patristic_distance_matrices,
     )
 
 
