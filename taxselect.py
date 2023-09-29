@@ -6,6 +6,7 @@ import re
 import os
 from geopy.distance import geodesic
 from dendropy.calculate.phylogeneticdistance import PhylogeneticDistanceMatrix
+import argparse
 
 
 def calc_dist(loc_1, loc_2):
@@ -357,7 +358,7 @@ def prune_taxa_without_sp_data(
     tree.prune_taxa(to_prune)
 
 
-def main(country_name_fp, centroid_fp, name_mapping_fp, tree_fp, num_to_select):
+def run(country_name_fp, centroid_fp, name_mapping_fp, tree_fp, num_to_select):
     if country_name_fp is not None:
         countries = read_country_names(country_name_fp)
         countries = frozenset(countries)
@@ -386,21 +387,56 @@ def main(country_name_fp, centroid_fp, name_mapping_fp, tree_fp, num_to_select):
     return
 
 
-if __name__ == "__main__":
-    if len(sys.argv) == 6:
-        main(
-            country_name_fp=sys.argv[1],
-            centroid_fp=sys.argv[2],
-            name_mapping_fp=sys.argv[3],
-            tree_fp=sys.argv[4],
-            num_to_select=int(sys.argv[5]),
-        )
+def main():
+    parser = argparse.ArgumentParser("taxselect.py")
+    parser.add_argument(
+        "--country-file",
+        default=None,
+        help="Optional list of countries, used if taxa have geo. "
+        "listings as a sets of centroids within several countries",
+    )
+    parser.add_argument(
+        "--name-mapping-file",
+        default=None,
+        help="Optional file tab-separated file with header and "
+        '"name_in_tree" then "IUCN_Name" used in country-file as the '
+        "first two columns of each line",
+    )
+    parser.add_argument(
+        "--centroid-file",
+        default=None,
+        required=True,
+        help="Filepath to CSV file with centroid locations for species. "
+        "If a country-file and name-mapping-file are being used, the "
+        "program expects the fields to be: \n"
+        "Species_no, binomial, Country_ID, Country, Longitude, Latitude\n"
+        "If there is just one line per species, the field ordering should be:\n"
+        "name,x,y\n",
+    )
+    parser.add_argument(
+        "--tree-file",
+        default=None,
+        required=True,
+        help="path to NEXUS file with a single ultrametric tree",
+    )
+    parser.add_argument(
+        "--num-to-select", default=2, type=int, help="the number of taxa to select"
+    )
+    args = parser.parse_args(sys.argv[1:])
+    if args.name_mapping_file is None:
+        if args.country_file is not None:
+            sys.exit("--country-file and --name-mapping-file must be used together.\n")
     else:
-        assert len(sys.argv) == 4
-        main(
-            country_name_fp=None,
-            centroid_fp=sys.argv[1],
-            tree_fp=sys.argv[2],
-            name_mapping_fp=None,
-            num_to_select=int(sys.argv[3]),
-        )
+        if args.country_file is None:
+            sys.exit("--country-file and --name-mapping-file must be used together.\n")
+    run(
+        country_name_fp=args.country_file,
+        centroid_fp=args.centroid_file,
+        tree_fp=args.tree_file,
+        name_mapping_fp=args.name_mapping_file,
+        num_to_select=args.num_to_select,
+    )
+
+
+if __name__ == "__main__":
+    main()

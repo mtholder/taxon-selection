@@ -6,7 +6,10 @@ dissimilar.
     source env/bin/activate
     pip install DendroPy
     pip install geopy
-    python taxselect.py path-to-centroids.csv ultrametric.tre N
+    python taxselect.py \
+        --centroid-file=path-to-centroids.csv \
+        --tree-file=ultrametric.tre \
+        --num-to-select=N
 
 where `N` is the number of taxa to choose.
 
