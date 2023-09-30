@@ -86,20 +86,20 @@ def read_taxonomy_stream(inp):
                 )
             continue
         _process_row_into_cbr(row, clades_by_rank, incertae_sedis)
-    print(Ranks.SUBCLASS.name, clades_by_rank[Ranks.SUBCLASS.value])
-    print(Ranks.SUBCLASS.name, clades_by_rank[Ranks.SUBCLASS.value])
-    print(Ranks.MAGNORDER.name, clades_by_rank[Ranks.MAGNORDER.value])
-    print(Ranks.SUPERORDER.name, clades_by_rank[Ranks.SUPERORDER.value])
-    print(Ranks.ORDER.name, clades_by_rank[Ranks.ORDER.value])
-    print(Ranks.SUBORDER.name, clades_by_rank[Ranks.SUBORDER.value])
-    print(Ranks.INFRAORDER.name, clades_by_rank[Ranks.INFRAORDER.value])
-    print(Ranks.PARVORDER.name, clades_by_rank[Ranks.PARVORDER.value])
-    print(Ranks.SUPERFAMILY.name, clades_by_rank[Ranks.SUPERFAMILY.value])
-    print(Ranks.FAMILY.name, clades_by_rank[Ranks.FAMILY.value])
-    print(Ranks.SUBFAMILY.name, clades_by_rank[Ranks.SUBFAMILY.value])
-    print(Ranks.TRIBE.name, clades_by_rank[Ranks.TRIBE.value])
-    print(Ranks.GENUS.name, clades_by_rank[Ranks.GENUS.value])
-    print(Ranks.SUBGENUS.name, clades_by_rank[Ranks.SUBGENUS.value])
+    # print(Ranks.SUBCLASS.name, clades_by_rank[Ranks.SUBCLASS.value])
+    # print(Ranks.SUBCLASS.name, clades_by_rank[Ranks.SUBCLASS.value])
+    # print(Ranks.MAGNORDER.name, clades_by_rank[Ranks.MAGNORDER.value])
+    # print(Ranks.SUPERORDER.name, clades_by_rank[Ranks.SUPERORDER.value])
+    # print(Ranks.ORDER.name, clades_by_rank[Ranks.ORDER.value])
+    # print(Ranks.SUBORDER.name, clades_by_rank[Ranks.SUBORDER.value])
+    # print(Ranks.INFRAORDER.name, clades_by_rank[Ranks.INFRAORDER.value])
+    # print(Ranks.PARVORDER.name, clades_by_rank[Ranks.PARVORDER.value])
+    # print(Ranks.SUPERFAMILY.name, clades_by_rank[Ranks.SUPERFAMILY.value])
+    # print(Ranks.FAMILY.name, clades_by_rank[Ranks.FAMILY.value])
+    # print(Ranks.SUBFAMILY.name, clades_by_rank[Ranks.SUBFAMILY.value])
+    # print(Ranks.TRIBE.name, clades_by_rank[Ranks.TRIBE.value])
+    # print(Ranks.GENUS.name, clades_by_rank[Ranks.GENUS.value])
+    # print(Ranks.SUBGENUS.name, clades_by_rank[Ranks.SUBGENUS.value])
     all_clades = {}
     for rank in Ranks:
         ncbr = clades_by_rank[rank.value]
@@ -116,6 +116,13 @@ def read_taxonomy_stream(inp):
         all_clades.update(ncbr)
     for datum in incertae_sedis:
         _process_incertae_sedis(datum, all_clades)
+    for rank in Ranks:
+        cbr = clades_by_rank[rank.value]
+        skl = list(cbr.keys())
+        skl.sort()
+        for k in skl:
+            v = cbr[k]
+            print(f"{k}\t{v}")
 
 
 _unset = frozenset(["NA", "INCERTAE SEDIS"])
