@@ -122,6 +122,30 @@ def is_null(value):
     return value in _unset
 
 
+class CladeDef(object):
+    def __init__(self, must_include=None, might_include=None):
+        self.must = set()
+        self.might = set()
+        if must_include:
+            self.must.update(must_include)
+        if might_include:
+            self.might.update(might_include)
+
+    def add(self, element):
+        self.must.add(element)
+
+    def add_possible(self, element):
+        self.might.add(element)
+
+    def __str__(self):
+        return self.__repr__()
+
+    def __repr__(self):
+        if self.might:
+            return f"CladeDef({repr(self.must)} ? {repr(self.might)})"
+        return f"CladeDef({repr(self.must)})"
+
+
 def _process_row_into_cbr(row, clades_by_rank):
     sci_name = row[0]
     subclass = row[5 + Ranks.SUBCLASS.value]
@@ -144,20 +168,20 @@ def _process_row_into_cbr(row, clades_by_rank):
     assert not is_null(family.upper())
     assert not is_null(genus.upper())
     subclass_d = clades_by_rank[Ranks.SUBCLASS.value]
-    subclass_d.setdefault(subclass, set()).add(infraclass)
+    subclass_d.setdefault(subclass, CladeDef()).add(infraclass)
     infraclass_d = clades_by_rank[Ranks.INFRACLASS.value]
     if is_null(magnorder):
         key4infra = order if is_null(superorder) else superorder
     else:
         key4infra = magnorder
-    infraclass_d.setdefault(infraclass, set()).add(key4infra)
+    infraclass_d.setdefault(infraclass, CladeDef()).add(key4infra)
     if not is_null(magnorder):
         magnorder_d = clades_by_rank[Ranks.MAGNORDER.value]
         key4magna = order if is_null(superorder) else superorder
-        magnorder_d.setdefault(magnorder, set()).add(key4magna)
+        magnorder_d.setdefault(magnorder, CladeDef()).add(key4magna)
     if not is_null(superorder):
         superorder_d = clades_by_rank[Ranks.SUPERORDER.value]
-        superorder_d.setdefault(superorder, set()).add(order)
+        superorder_d.setdefault(superorder, CladeDef()).add(order)
     order_d = clades_by_rank[Ranks.ORDER.value]
     if not is_null(suborder):
         key4order = suborder
@@ -169,7 +193,7 @@ def _process_row_into_cbr(row, clades_by_rank):
                 key4order = parvorder
             else:
                 key4order = family if is_null(superfamily) else superfamily
-    order_d.setdefault(order, set()).add(key4order)
+    order_d.setdefault(order, CladeDef()).add(key4order)
     if not is_null(suborder):
         suborder_d = clades_by_rank[Ranks.SUBORDER.value]
         if not is_null(infraorder):
@@ -179,40 +203,40 @@ def _process_row_into_cbr(row, clades_by_rank):
                 key4suborder = parvorder
             else:
                 key4suborder = family if is_null(superfamily) else superfamily
-        suborder_d.setdefault(suborder, set()).add(key4suborder)
+        suborder_d.setdefault(suborder, CladeDef()).add(key4suborder)
     if not is_null(infraorder):
         infraorder_d = clades_by_rank[Ranks.INFRAORDER.value]
         if not is_null(parvorder):
             key4infraorder = parvorder
         else:
             key4infraorder = family if is_null(superfamily) else superfamily
-        infraorder_d.setdefault(infraorder, set()).add(key4infraorder)
+        infraorder_d.setdefault(infraorder, CladeDef()).add(key4infraorder)
     if not is_null(parvorder):
         parorder_d = clades_by_rank[Ranks.PARVORDER.value]
         key4parvorder = family if is_null(superfamily) else superfamily
-        parorder_d.setdefault(parvorder, set()).add(key4parvorder)
+        parorder_d.setdefault(parvorder, CladeDef()).add(key4parvorder)
     if not is_null(superfamily):
         superfamily_d = clades_by_rank[Ranks.SUPERFAMILY.value]
-        superfamily_d.setdefault(superfamily, set()).add(family)
+        superfamily_d.setdefault(superfamily, CladeDef()).add(family)
     family_d = clades_by_rank[Ranks.FAMILY.value]
     if not is_null(subfamily):
         key4family = subfamily
     else:
         key4family = genus if is_null(tribe) else tribe
-    family_d.setdefault(family, set()).add(key4family)
+    family_d.setdefault(family, CladeDef()).add(key4family)
     if not is_null(subfamily):
         subfamily_d = clades_by_rank[Ranks.SUBFAMILY.value]
         key4subfamily = genus if is_null(tribe) else tribe
-        subfamily_d.setdefault(subfamily, set()).add(key4subfamily)
+        subfamily_d.setdefault(subfamily, CladeDef()).add(key4subfamily)
     if not is_null(tribe):
         tribe_d = clades_by_rank[Ranks.TRIBE.value]
-        tribe_d.setdefault(tribe, set()).add(genus)
+        tribe_d.setdefault(tribe, CladeDef()).add(genus)
     genus_d = clades_by_rank[Ranks.GENUS.value]
     key4genus = sci_name if is_null(subgenus) else f"{genus } subgenus {subgenus}"
-    genus_d.setdefault(genus, set()).add(key4genus)
+    genus_d.setdefault(genus, CladeDef()).add(key4genus)
     if not is_null(subgenus):
         subgenus_d = clades_by_rank[Ranks.SUBGENUS.value]
-        subgenus_d.setdefault(f"{genus } subgenus {subgenus}", set()).add(sci_name)
+        subgenus_d.setdefault(f"{genus } subgenus {subgenus}", CladeDef()).add(sci_name)
 
 
 def main(taxonomy_fp=None):
