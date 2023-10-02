@@ -22,13 +22,13 @@ class Ranks(Enum):
 
 
 class CladeDef(object):
-    def __init__(self, must_include=None, might_include=None):
+    def __init__(self, mrca_of=None, incertae_sedis=None):
         self.must = set()
         self.might = set()
-        if must_include:
-            self.must.update(must_include)
-        if might_include:
-            self.might.update(might_include)
+        if mrca_of:
+            self.must.update(mrca_of)
+        if incertae_sedis:
+            self.might.update(incertae_sedis)
 
     def add(self, element):
         self.must.add(element)
@@ -41,8 +41,8 @@ class CladeDef(object):
 
     def __repr__(self):
         if self.might:
-            return f"CladeDef({repr(self.must)}, {repr(self.might)})"
-        return f"CladeDef({repr(self.must)})"
+            return f"CladeDef(mrca_of={repr(self.must)}, incertae_sedis={repr(self.might)})"
+        return f"CladeDef(mrca_of={repr(self.must)})"
 
 
 def read_taxonomy_stream(inp):
@@ -98,6 +98,7 @@ def read_taxonomy_stream(inp):
         "diffSinceMSW3",
     ]
     reader = csv.reader(inp, delimiter=",")
+    # noinspection PyUnusedLocal
     clades_by_rank = [dict() for i in range(14)]
     incertae_sedis = []
     for n, row in enumerate(reader):

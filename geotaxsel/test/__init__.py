@@ -9,10 +9,8 @@
 geotaxsel testing suite.
 """
 
-import unittest
-import re
 import os
-import logging
+import re
 
 
 def get_test_file_names():
