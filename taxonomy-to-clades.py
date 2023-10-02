@@ -5,10 +5,13 @@ from geotaxsel import read_taxonomy_stream
 
 def main(taxonomy_fp=None):
     if taxonomy_fp is None:
-        read_taxonomy_stream(sys.stdin)
+        clades = read_taxonomy_stream(sys.stdin)
     else:
         with open(taxonomy_fp, "r") as inp:
-            read_taxonomy_stream(inp)
+            clades = read_taxonomy_stream(inp)
+    out = sys.stdout
+    for line in clades:
+        out.write(f"{line[0]}\t{line[1]}\n")
 
 
 if __name__ == "__main__":

@@ -141,13 +141,15 @@ def read_taxonomy_stream(inp):
         all_clades.update(ncbr)
     for datum in incertae_sedis:
         _process_incertae_sedis(datum, all_clades)
+    retlist = []
     for rank in Ranks:
         cbr = clades_by_rank[rank.value]
         skl = list(cbr.keys())
         skl.sort()
         for k in skl:
             v = cbr[k]
-            print(f"{k}\t{v}")
+            retlist.append((k, v))
+    return retlist
 
 
 _unset = frozenset(["NA", "INCERTAE SEDIS"])
@@ -236,7 +238,7 @@ def _process_incertae_sedis(data_row, clades_dict):
 
 
 def _process_row_into_cbr(row, clades_by_rank, incertae_sedis_rows):
-    sci_name = row[0]
+    sci_name = " ".join(row[0].split("_"))
     subclass = row[5 + Ranks.SUBCLASS.value]
     infraclass = row[5 + Ranks.INFRACLASS.value]
     magnorder = row[5 + Ranks.MAGNORDER.value]
