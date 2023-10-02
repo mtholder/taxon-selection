@@ -200,3 +200,4 @@ def parse_geo_and_tree(country_name_fp, centroid_fp, name_mapping_fp, tree_fp):
         name_mapping_fp=name_mapping_fp,
         centroid_fp=centroid_fp,
     )
+    return tree, sp_by_name
