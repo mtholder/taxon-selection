@@ -129,7 +129,7 @@ _unset = frozenset(["NA", "INCERTAE SEDIS"])
 
 
 def is_null(value):
-    return value in _unset
+    return value.upper() in _unset
 
 
 class CladeDef(object):
@@ -215,8 +215,12 @@ def _process_incertae_sedis(data_row, clades_dict):
         assert not is_null(genus)
         clade_def = clades_dict[genus]
         for subc in clade_def.must:
-            sc = clades_dict[subc]
-            sc.add_possible(sci_name)
+            try:
+                sc = clades_dict[subc]
+            except KeyError:
+                pass
+            else:
+                sc.add_possible(sci_name)
     if is_inc_sedis(subfamily):
         assert not is_null(family)
         clade_def = clades_dict[family]
