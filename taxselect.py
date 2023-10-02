@@ -2,6 +2,7 @@
 import argparse
 import sys
 
+
 from dendropy.calculate.phylogeneticdistance import PhylogeneticDistanceMatrix
 from geopy.distance import geodesic
 
@@ -181,7 +182,11 @@ def run(
     clade_defs_fp=None,
 ):
     tree, sp_by_name = parse_geo_and_tree(
-        country_name_fp, centroid_fp, name_mapping_fp, tree_fp
+        country_name_fp,
+        centroid_fp,
+        name_mapping_fp,
+        tree_fp,
+        clade_defs_fp=clade_defs_fp,
     )
     if use_ultrametricity:
         sel = ultrametric_greedy_mmd(tree, num_to_select, sp_by_name)

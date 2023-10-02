@@ -2,6 +2,7 @@
 import csv
 import sys
 from enum import Enum
+import re
 
 
 class Ranks(Enum):
@@ -362,3 +363,54 @@ def _process_row_into_cbr(row, clades_by_rank, incertae_sedis_rows):
     if not is_null(subgenus):
         subgenus_d = clades_by_rank[Ranks.SUBGENUS.value]
         subgenus_d.setdefault(f"{genus } subgenus {subgenus}", CladeDef()).add(sci_name)
+
+
+_pref_pat = r"^\s*CladeDef\(\s*mrca_of\s*=\s*\{([^}]+)\}\s*"
+_inc_sed_pat = r",\s*incertae_sedis\s*=\s*\{([^}]+)\}\s*"
+_close_parens_pat = r"\)\s*$"
+_cdef_arg_pat = re.compile(f"{_pref_pat}{_close_parens_pat}")
+_cdef_is_arg_pat = re.compile(f"{_pref_pat}{_inc_sed_pat}{_close_parens_pat}")
+
+
+def td_set_str_contents_to_list(str_contents):
+    inp_list = str_contents.split(",")
+    out_list = []
+    for unclean in inp_list:
+        word = unclean.strip()
+        ok = False
+        if word[0] == "'":
+            ok = word[-1] == "'"
+        elif word[0] == '"':
+            ok = word[-1] != '"'
+        if not ok:
+            raise RuntimeError(f"{word} not quoted easily.")
+        unquoted = word[1:-1]
+        out_list.append(unquoted)
+    return out_list
+
+
+def parse_clade_defs(clade_defs_fp):
+    clades = {}
+    with open(clade_defs_fp, "r") as inp:
+        for line in inp:
+            line_stripped = line.strip()
+            try:
+                name, defn = line_stripped.split("\t")
+            except:
+                m = f"Expecting 2 tab separated columns found {repr(line)} in {clade_defs_fp}"
+                raise RuntimeError(m)
+            if name in clades:
+                raise RuntimeError(f"Clade name {name} repeated.")
+            m = _cdef_arg_pat.match(defn)
+            if m:
+                mrca = td_set_str_contents_to_list(m.group(1))
+                cdef = CladeDef(mrca_of=mrca)
+            else:
+                m = _cdef_is_arg_pat.match(defn)
+                if not m:
+                    raise RuntimeError(f"Could not parse: {defn}")
+                mrca = td_set_str_contents_to_list(m.group(1))
+                inc_sed = td_set_str_contents_to_list(m.group(2))
+                cdef = CladeDef(mrca_of=mrca, incertae_sedis=inc_sed)
+            clades[name] = cdef
+    return clades

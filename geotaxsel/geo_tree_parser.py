@@ -3,6 +3,7 @@ import dendropy
 import csv
 import re
 from .logs import info
+from .taxonomy import parse_clade_defs
 
 
 class Loc(object):
@@ -180,7 +181,12 @@ def prune_taxa_without_sp_data(
     tree.prune_taxa(to_prune)
 
 
-def parse_geo_and_tree(country_name_fp, centroid_fp, name_mapping_fp, tree_fp):
+def parse_geo_and_tree(
+    country_name_fp, centroid_fp, name_mapping_fp, tree_fp, clade_defs_fp
+):
+    clades = parse_clade_defs(clade_defs_fp)
+    print(len(clades))
+    sys.exit("early")
     if country_name_fp is not None:
         countries = read_country_names(country_name_fp)
         countries = frozenset(countries)
