@@ -178,6 +178,7 @@ def run(
     tree_fp,
     num_to_select,
     use_ultrametricity=True,
+    clade_defs_fp=None,
 ):
     tree, sp_by_name = parse_geo_and_tree(
         country_name_fp, centroid_fp, name_mapping_fp, tree_fp
@@ -217,6 +218,14 @@ def main():
         "name,x,y\n",
     )
     parser.add_argument(
+        "--clade-defs-file",
+        default=None,
+        required=False,
+        help="Filepath to tab-separated file no header that is the output of "
+        "taxonomy-to-clades.py. Each line should contain a name in the first "
+        "column and clade definition in the second row.",
+    )
+    parser.add_argument(
         "--tree-file",
         default=None,
         required=True,
@@ -247,6 +256,7 @@ def main():
         name_mapping_fp=args.name_mapping_file,
         num_to_select=args.num_to_select,
         use_ultrametricity=not args.use_patristic_distance_matrices,
+        clade_defs_fp=args.clade_defs_file,
     )
 
 
