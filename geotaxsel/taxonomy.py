@@ -102,6 +102,9 @@ def read_taxonomy_stream(inp):
     # noinspection PyUnusedLocal
     clades_by_rank = [dict() for i in range(14)]
     incertae_sedis = []
+    sci_name_idx = headers.index("sciName")
+    cmw_sci_name_idx = headers.index("CMW_sciName")
+    cmw2current = {}
     for n, row in enumerate(reader):
         if n == 0:
             while row[-1] == "":
@@ -111,6 +114,12 @@ def read_taxonomy_stream(inp):
                     "Expecting MDD headers:\n{}\n".format("\n".join(headers))
                 )
             continue
+        raw_sci_name = row[sci_name_idx].strip()
+        raw_cmw_name = row[cmw_sci_name_idx].strip()
+        clean_sci = " ".join(raw_sci_name.split("_"))
+        clean_cmw = " ".join(raw_cmw_name.split("_"))
+        if clean_cmw and (clean_sci != clean_cmw):
+            cmw2current[clean_cmw] = clean_sci
         _process_row_into_cbr(row, clades_by_rank, incertae_sedis)
     # print(Ranks.SUBCLASS.name, clades_by_rank[Ranks.SUBCLASS.value])
     # print(Ranks.SUBCLASS.name, clades_by_rank[Ranks.SUBCLASS.value])
@@ -150,7 +159,7 @@ def read_taxonomy_stream(inp):
         for k in skl:
             v = cbr[k]
             retlist.append((k, v))
-    return retlist
+    return retlist, cmw2current
 
 
 _unset = frozenset(["NA", "INCERTAE SEDIS"])
@@ -390,6 +399,8 @@ def td_set_str_contents_to_list(str_contents):
 
 
 def parse_clade_defs(clade_defs_fp):
+    if not clade_defs_fp:
+        return None
     clades = {}
     with open(clade_defs_fp, "r") as inp:
         for line in inp:

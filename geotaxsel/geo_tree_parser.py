@@ -1,9 +1,9 @@
 #! /usr/bin/env python3
 import dendropy
 import csv
-import re
 from .logs import info
 from .taxonomy import parse_clade_defs
+from .tree_cleaning import prune_taxa_without_sp_data
 
 
 class Loc(object):
@@ -153,40 +153,11 @@ def read_country_names(country_name_fp):
     return countries
 
 
-def prune_taxa_without_sp_data(
-    tree, sp_w_data, upham_to_iucn=None, name_mapping_fp="", centroid_fp=""
-):
-    taxa_list = [i for i in tree.taxon_namespace]
-    to_prune = []
-    sp_pat = re.compile("^([A-Z][a-z]+ +[-a-z0-9]+) [A-Z][A-Za-z]+ [A-Z]+$")
-    for n, i in enumerate(taxa_list):
-        m = sp_pat.match(i.label)
-        if not m:
-            to_prune.append(i)
-            info(f'Will prune "{i.label}". did not match species name pattern')
-            continue
-        sp_name = m.group(1)
-        if upham_to_iucn is not None:
-            final_name = upham_to_iucn.get(sp_name)
-        else:
-            final_name = sp_name
-        if final_name is None:
-            to_prune.append(i)
-            info(f'Will prune "{sp_name}" not found in {name_mapping_fp}')
-        elif final_name not in sp_w_data:
-            to_prune.append(i)
-            info(f"Will prune sp_name not found in {centroid_fp}")
-        else:
-            i.label = final_name
-    tree.prune_taxa(to_prune)
-
-
 def parse_geo_and_tree(
     country_name_fp, centroid_fp, name_mapping_fp, tree_fp, clade_defs_fp
 ):
     clades = parse_clade_defs(clade_defs_fp)
-    print(len(clades))
-    sys.exit("early")
+    tree = dendropy.Tree.get(path=tree_fp, schema="nexus")
     if country_name_fp is not None:
         countries = read_country_names(country_name_fp)
         countries = frozenset(countries)
@@ -197,7 +168,6 @@ def parse_geo_and_tree(
         countries = None
         upham_to_iucn = None
     sp_by_name = read_centroids(centroid_fp, countries)
-    tree = dendropy.Tree.get(path=tree_fp, schema="nexus")
 
     prune_taxa_without_sp_data(
         tree,
@@ -205,5 +175,6 @@ def parse_geo_and_tree(
         upham_to_iucn=upham_to_iucn,
         name_mapping_fp=name_mapping_fp,
         centroid_fp=centroid_fp,
+        clades=clades,
     )
     return tree, sp_by_name
