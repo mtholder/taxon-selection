@@ -8,6 +8,7 @@ from geopy.distance import geodesic
 
 from geotaxsel import debug
 from geotaxsel import parse_geo_and_tree
+from geotaxsel import info
 
 
 def calc_dist(loc_1, loc_2):
@@ -59,7 +60,7 @@ def tip_to_root_dist(nd, root):
     return t
 
 
-def ultrametric_greedy_mmd(tree, num_taxa, sp_by_name):
+def ultrametric_greedy_mmd(tree, num_taxa, sp_by_name, cut_branches_fp):
     tree.calc_node_ages(ultrametricity_precision=5e-5)
     # for nd in tree.ageorder_node_iter(descending=True):
     #     if nd.is_leaf():
@@ -87,14 +88,50 @@ def ultrametric_greedy_mmd(tree, num_taxa, sp_by_name):
             "Polytomy caused num_taxa to be exceeded need to check last_added and remove some..."
         )
 
-    for nd in chosen_ancs:
-        t2rd = tip_to_root_dist(nd, tree.seed_node)
-        leaves_below = list(nd.leaf_nodes())
-        first, last = leaves_below[0].taxon.label, leaves_below[-1].taxon.label
-        print(
-            f"internal node at age {nd.age} and tip to root = {t2rd} with {len(leaves_below)} leaves below: {first} ... {last}"
-        )
+    output_chosen_anc(tree, cut_branches_fp, chosen_ancs)
     sys.exit("early\n")
+
+
+def subtree_name(nd, mrca_notation=True):
+    if hasattr(nd, "clade_names"):
+        return nd.clade_names[-1]
+    if nd.is_leaf():
+        return nd.taxon.label
+    children = nd.child_nodes()
+    assert len(children) > 1
+    child_names = [subtree_name(i, mrca_notation=False) for i in children]
+    child_names_w_len = [(len(i), i) for i in child_names]
+    shortest, sec_shortest = child_names_w_len[0][1], child_names_w_len[1][1]
+    if mrca_notation:
+        return f"MRCA({shortest} + {sec_shortest})"
+    else:
+        return shortest
+
+
+def output_chosen_anc(tree, cut_branches_fp, chosen_ancs):
+    if not cut_branches_fp:
+        return
+    with open(cut_branches_fp, "w") as outp:
+        outp.write("dist-to-root\tdist-to-tips\tnum-leaves\tname-or-mrca\n")
+        prod = 1
+        for nd in chosen_ancs:
+            t2rd = tip_to_root_dist(nd, tree.seed_node)
+            leaves_below = list(nd.leaf_nodes())
+            nl = len(leaves_below)
+            prod *= nl
+            nm = subtree_name(nd)
+            outp.write(f"{t2rd}\t{nd.age}\t{nl}\t{nm}\n")
+        prod_str = str(prod)
+        pow_10 = len(prod_str) - 1
+        if pow_10 > 9:
+            cut_prod_str = prod_str[:7]
+            dec_str = f"{cut_prod_str[0]}.{cut_prod_str[1:]}"
+            parens_str = f" (about {dec_str}E{pow_10})"
+        else:
+            parens_str = ""
+        info(
+            f"{prod_str}{parens_str} total choices of {len(chosen_ancs)} that maximize PD."
+        )
 
 
 def greedy_mmd(tree, num_taxa, sp_by_name):
@@ -181,6 +218,7 @@ def run(
     use_ultrametricity=True,
     clade_defs_fp=None,
     name_updating_fp=None,
+    cut_branches_fp=None,
 ):
     tree, sp_by_name = parse_geo_and_tree(
         country_name_fp,
@@ -191,7 +229,7 @@ def run(
         name_updating_fp=name_updating_fp,
     )
     if use_ultrametricity:
-        sel = ultrametric_greedy_mmd(tree, num_to_select, sp_by_name)
+        sel = ultrametric_greedy_mmd(tree, num_to_select, sp_by_name, cut_branches_fp)
     else:
         sel = greedy_mmd(tree, num_to_select, sp_by_name)
     print("Selected:\n  {}\n".format("\n  ".join(sel)))
@@ -241,6 +279,12 @@ def main():
         "column and clade definition in the second row.",
     )
     parser.add_argument(
+        "--cut-branches-file",
+        default=None,
+        required=False,
+        help="Optional filepath to output CSV describing the branch cut points.",
+    )
+    parser.add_argument(
         "--tree-file",
         default=None,
         required=True,
@@ -273,6 +317,7 @@ def main():
         use_ultrametricity=not args.use_patristic_distance_matrices,
         clade_defs_fp=args.clade_defs_file,
         name_updating_fp=args.name_updating_file,
+        cut_branches_fp=args.cut_branches_file,
     )
 
 

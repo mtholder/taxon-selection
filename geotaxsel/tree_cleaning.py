@@ -118,7 +118,16 @@ def _eval_one_clade(tree, cdef, clades, tip_label_2_nd):
         nld = nls.difference(cdef.must_taxa)
         if not nld.issubset(cdef.might_taxa):
             nldt = [i.label for i in nld]
-            info(f"Clade {cdef.name} not found due to intrusion of {nldt}")
+            if cdef.must_taxa.issubset(nls):
+                info(f"Clade {cdef.name} not found due to intrusion of {nldt}")
+            else:
+                lsd = nls.difference(cdef.must_taxa)
+                lsdt = [i.label for i in lsd]
+                lsi = nls.intersection(cdef.must_taxa)
+                lsit = [i.label for i in lsi]
+                info(
+                    f"Clade {cdef.name} not found due to intrusion of {nldt} as closer to {lsit} than the other members({lsdt}) are."
+                )
             return False, curr_nd
         if cdef.must_taxa.issubset(nls):
             return True, curr_nd
@@ -229,4 +238,3 @@ def prune_taxa_without_sp_data(
     if clades:
         tree.encode_bipartitions()
         label_internals(tree, clades)
-    sys.exit("early")
