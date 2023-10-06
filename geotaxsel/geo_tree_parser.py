@@ -153,9 +153,44 @@ def read_country_names(country_name_fp):
     return countries
 
 
+def parse_name_updating(name_updating_fp):
+    mapping = {}
+    rev_map_set = set()
+    if not name_updating_fp:
+        return {}
+    with open(name_updating_fp, "r", newline="") as csvfile:
+        reader = csv.reader(csvfile, delimiter="\t")
+        for n, row in enumerate(reader):
+            if n == 0:
+                if row[0] != "CMW_sciName" or row[1] != "sciName":
+                    raise RuntimeError(
+                        f"Expecting {name_updating_fp} to have CMW_sciName and sciName as the headers"
+                        "as produced by taxonomy-to-clades.py"
+                    )
+                continue
+            tree_label, tax_label = row[0], row[1]
+            if tree_label in mapping:
+                raise RuntimeError(
+                    f"{tree_label} repeated in first column of {name_updating_fp}"
+                )
+            if tax_label in rev_map_set:
+                raise RuntimeError(
+                    f"{tax_label} repeated in second column of {name_updating_fp}"
+                )
+            mapping[tree_label] = tax_label
+            rev_map_set.add(tax_label)
+    return mapping
+
+
 def parse_geo_and_tree(
-    country_name_fp, centroid_fp, name_mapping_fp, tree_fp, clade_defs_fp
+    country_name_fp,
+    centroid_fp,
+    name_mapping_fp,
+    tree_fp,
+    clade_defs_fp,
+    name_updating_fp=None,
 ):
+    new_names_for_leaves = parse_name_updating(name_updating_fp)
     clades = parse_clade_defs(clade_defs_fp)
     tree = dendropy.Tree.get(path=tree_fp, schema="nexus")
     if country_name_fp is not None:
@@ -176,5 +211,6 @@ def parse_geo_and_tree(
         name_mapping_fp=name_mapping_fp,
         centroid_fp=centroid_fp,
         clades=clades,
+        new_names_for_leaves=new_names_for_leaves,
     )
     return tree, sp_by_name

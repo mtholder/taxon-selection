@@ -180,6 +180,7 @@ def run(
     num_to_select,
     use_ultrametricity=True,
     clade_defs_fp=None,
+    name_updating_fp=None,
 ):
     tree, sp_by_name = parse_geo_and_tree(
         country_name_fp,
@@ -187,6 +188,7 @@ def run(
         name_mapping_fp,
         tree_fp,
         clade_defs_fp=clade_defs_fp,
+        name_updating_fp=name_updating_fp,
     )
     if use_ultrametricity:
         sel = ultrametric_greedy_mmd(tree, num_to_select, sp_by_name)
@@ -210,6 +212,14 @@ def main():
         help="Optional file tab-separated file with header and "
         '"name_in_tree" then "IUCN_Name" used in country-file as the '
         "first two columns of each line",
+    )
+    parser.add_argument(
+        "--name-updating-file",
+        default=None,
+        help="Optional file tab-separated file with header and "
+        '"CMW_sciName" then "sciName" where sciName may appear"'
+        "in the clades file, but CMW_sciName may be used in the"
+        "tree.",
     )
     parser.add_argument(
         "--centroid-file",
@@ -262,6 +272,7 @@ def main():
         num_to_select=args.num_to_select,
         use_ultrametricity=not args.use_patristic_distance_matrices,
         clade_defs_fp=args.clade_defs_file,
+        name_updating_fp=args.name_updating_file,
     )
 
 

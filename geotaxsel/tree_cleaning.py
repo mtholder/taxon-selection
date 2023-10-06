@@ -33,10 +33,17 @@ def alert_pruning(msg, to_prune):
 
 
 def prune_taxa_without_sp_data(
-    tree, sp_w_data, upham_to_iucn=None, name_mapping_fp="", centroid_fp="", clades=None
+    tree,
+    sp_w_data,
+    upham_to_iucn=None,
+    name_mapping_fp="",
+    centroid_fp="",
+    clades=None,
+    new_names_for_leaves=None,
 ):
     clade_tips = tips_from_clades(clades) if clades else set()
-
+    if new_names_for_leaves is None:
+        new_names_for_leaves = {}
     taxa_list = [i for i in tree.taxon_namespace]
     to_prune = []
     sp_pat = re.compile("^([A-Z][a-z]+ +[-a-z0-9]+) [A-Z][A-Za-z]+ [A-Z]+$")
@@ -44,6 +51,7 @@ def prune_taxa_without_sp_data(
     no_geo = []
     null_name_mapped = []
     not_in_clades = []
+    remapped = []
     for n, i in enumerate(taxa_list):
         m = sp_pat.match(i.label)
         if not m:
@@ -52,13 +60,17 @@ def prune_taxa_without_sp_data(
             continue
         sp_name = m.group(1)
         if upham_to_iucn is not None:
-            final_name = upham_to_iucn.get(sp_name)
+            next_name = upham_to_iucn.get(sp_name)
         else:
-            final_name = sp_name
-        if final_name is None:
+            next_name = sp_name
+        if next_name is None:
             to_prune.append(i)
             null_name_mapped.append(sp_name)
-        elif final_name not in sp_w_data:
+            continue
+        final_name = new_names_for_leaves.get(next_name, next_name)
+        if final_name != next_name:
+            remapped.append((next_name, final_name))
+        if final_name not in sp_w_data:
             to_prune.append(i)
             no_geo.append(final_name)
         elif clades and final_name not in clade_tips:
@@ -66,6 +78,9 @@ def prune_taxa_without_sp_data(
             not_in_clades.append(final_name)
         else:
             i.label = final_name
+    info(f"{len(remapped)} tip names updated to new taxonomy:")
+    for from_n, to_n in remapped:
+        info(f"  {from_n} --> {to_n}")
     alert_pruning(f"not matching expected form of a species name", bad_names)
     alert_pruning(f"not found in {name_mapping_fp}", null_name_mapped)
     alert_pruning(f"not found in {centroid_fp}", no_geo)
