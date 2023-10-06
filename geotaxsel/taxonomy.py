@@ -22,10 +22,23 @@ class Ranks(Enum):
     SUBGENUS = 13
 
 
+_rank_str2rank_dict = {_i.name: _i for _i in Ranks}
+
+
+def rank_str_to_rank(s):
+    if s is None:
+        return None
+    try:
+        return _rank_str2rank_dict[s]
+    except KeyError:
+        raise ValueError(f"Rank {repr(s)} not recognized.")
+
+
 class CladeDef(object):
-    def __init__(self, mrca_of=None, incertae_sedis=None):
+    def __init__(self, mrca_of=None, incertae_sedis=None, rank=None):
         self.must = set()
         self.might = set()
+        self.rank = rank
         if mrca_of:
             self.must.update(mrca_of)
         if incertae_sedis:
@@ -41,9 +54,12 @@ class CladeDef(object):
         return self.__repr__()
 
     def __repr__(self):
+        rs = ""
+        if self.rank is not None:
+            rs = f", rank=Ranks.{self.rank.name}"
         if self.might:
-            return f"CladeDef(mrca_of={repr(self.must)}, incertae_sedis={repr(self.might)})"
-        return f"CladeDef(mrca_of={repr(self.must)})"
+            return f"CladeDef(mrca_of={repr(self.must)}, incertae_sedis={repr(self.might)}{rs})"
+        return f"CladeDef(mrca_of={repr(self.must)}{rs})"
 
 
 def read_taxonomy_stream(inp):
@@ -138,6 +154,8 @@ def read_taxonomy_stream(inp):
     all_clades = {}
     for rank in Ranks:
         ncbr = clades_by_rank[rank.value]
+        for v in ncbr.values():
+            v.rank = rank
         rk = set(ncbr.keys())
         acs = set(all_clades.keys())
         iset = rk.intersection(acs)
@@ -376,9 +394,38 @@ def _process_row_into_cbr(row, clades_by_rank, incertae_sedis_rows):
 
 _pref_pat = r"^\s*CladeDef\(\s*mrca_of\s*=\s*\{([^}]+)\}\s*"
 _inc_sed_pat = r",\s*incertae_sedis\s*=\s*\{([^}]+)\}\s*"
+_ranks_pat = r",\s*rank\s*=\s*Ranks[.]([-_A-Za-z]+)\s*"
 _close_parens_pat = r"\)\s*$"
 _cdef_arg_pat = re.compile(f"{_pref_pat}{_close_parens_pat}")
 _cdef_is_arg_pat = re.compile(f"{_pref_pat}{_inc_sed_pat}{_close_parens_pat}")
+_cdef_r_arg_pat = re.compile(f"{_pref_pat}{_ranks_pat}{_close_parens_pat}")
+_cdef_is_r_arg_pat = re.compile(
+    f"{_pref_pat}{_inc_sed_pat}{_ranks_pat}{_close_parens_pat}"
+)
+
+
+def _parse_cdef_str(defn):
+    m = _cdef_r_arg_pat.match(defn)
+    if m:
+        mrca = td_set_str_contents_to_list(m.group(1))
+        rank = rank_str_to_rank(m.group(2))
+        return CladeDef(mrca_of=mrca, rank=rank)
+    m = _cdef_is_r_arg_pat.match(defn)
+    if m:
+        mrca = td_set_str_contents_to_list(m.group(1))
+        inc_sed = td_set_str_contents_to_list(m.group(2))
+        rank = rank_str_to_rank(m.group(3))
+        return CladeDef(mrca_of=mrca, incertae_sedis=inc_sed, rank=rank)
+    m = _cdef_arg_pat.match(defn)
+    if m:
+        mrca = td_set_str_contents_to_list(m.group(1))
+        return CladeDef(mrca_of=mrca)
+    m = _cdef_is_arg_pat.match(defn)
+    if m:
+        mrca = td_set_str_contents_to_list(m.group(1))
+        inc_sed = td_set_str_contents_to_list(m.group(2))
+        return CladeDef(mrca_of=mrca, incertae_sedis=inc_sed)
+    raise RuntimeError(f"Could not parse: {defn}")
 
 
 def td_set_str_contents_to_list(str_contents):
@@ -412,16 +459,5 @@ def parse_clade_defs(clade_defs_fp):
                 raise RuntimeError(m)
             if name in clades:
                 raise RuntimeError(f"Clade name {name} repeated.")
-            m = _cdef_arg_pat.match(defn)
-            if m:
-                mrca = td_set_str_contents_to_list(m.group(1))
-                cdef = CladeDef(mrca_of=mrca)
-            else:
-                m = _cdef_is_arg_pat.match(defn)
-                if not m:
-                    raise RuntimeError(f"Could not parse: {defn}")
-                mrca = td_set_str_contents_to_list(m.group(1))
-                inc_sed = td_set_str_contents_to_list(m.group(2))
-                cdef = CladeDef(mrca_of=mrca, incertae_sedis=inc_sed)
-            clades[name] = cdef
+            clades[name] = _parse_cdef_str(defn)
     return clades

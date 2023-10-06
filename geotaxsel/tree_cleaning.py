@@ -10,7 +10,7 @@ def tips_from_clades(clades):
         for label in itertools.chain(cd.must, cd.might):
             if label not in clades:
                 leaf_label_set.add(label)
-    print(len(leaf_label_set), "labels in clades")
+    info(f"{len(leaf_label_set)} labels in clades")
     return leaf_label_set
 
 
@@ -85,7 +85,7 @@ def prune_taxa_without_sp_data(
     alert_pruning(f"not found in {name_mapping_fp}", null_name_mapped)
     alert_pruning(f"not found in {centroid_fp}", no_geo)
     alert_pruning(f"not found in any clade in clade definitions", not_in_clades)
+    tree.prune_taxa(to_prune)
     if clades:
         tree.encode_bipartitions()
     sys.exit("early")
-    tree.prune_taxa(to_prune)
