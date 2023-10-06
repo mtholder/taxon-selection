@@ -104,11 +104,22 @@ def subtree_name(nd, mrca_notation=True):
         return shortest
 
 
+def anc_name(nd):
+    par = nd.parent_node
+    if par is None:
+        return ""
+    if hasattr(par, "clade_names"):
+        return par.clade_names[0]
+    return anc_name(par)
+
+
 def output_chosen_anc(tree, cut_branches_fp, chosen_ancs):
     if not cut_branches_fp:
         return
     with open(cut_branches_fp, "w") as outp:
-        outp.write("dist-to-root\tdist-to-tips\tnum-leaves\tname-or-mrca\n")
+        outp.write(
+            "dist-to-root\tdist-to-tips\tnum-leaves\tname-or-mrca\tancestral-clade\n"
+        )
         prod = 1
         for nd in chosen_ancs:
             t2rd = tip_to_root_dist(nd, tree.seed_node)
@@ -116,7 +127,8 @@ def output_chosen_anc(tree, cut_branches_fp, chosen_ancs):
             nl = len(leaves_below)
             prod *= nl
             nm = subtree_name(nd)
-            outp.write(f"{t2rd}\t{nd.age}\t{nl}\t{nm}\n")
+            ancnm = anc_name(nd)
+            outp.write(f"{t2rd}\t{nd.age}\t{nl}\t{nm}\t{ancnm}\n")
         prod_str = str(prod)
         pow_10 = len(prod_str) - 1
         if pow_10 > 9:
@@ -125,9 +137,8 @@ def output_chosen_anc(tree, cut_branches_fp, chosen_ancs):
             parens_str = f" (about {dec_str}E{pow_10})"
         else:
             parens_str = ""
-        info(
-            f"{prod_str}{parens_str} total choices of {len(chosen_ancs)} that maximize PD."
-        )
+        msg = f"{prod_str}{parens_str} total choices of {len(chosen_ancs)} that maximize PD."
+        info(msg)
 
 
 def greedy_mmd(tree, num_taxa, sp_by_name):
