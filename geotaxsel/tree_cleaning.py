@@ -33,39 +33,77 @@ def alert_pruning(msg, to_prune):
         info(f'  "{el}"')
 
 
+def _fill_must_taxa(cdef, missing_from_tree, tip_label_2_nd, clade_name_to_def, strict):
+    reprocess = False
+    for label in cdef.must:
+        if label in missing_from_tree:
+            continue
+        nd = tip_label_2_nd.get(label)
+        if nd is None:
+            des_cdef = clade_name_to_def.get(label)
+            if des_cdef is None:
+                if len(label.split()) == 2:
+                    missing_from_tree.add(label)
+                elif strict:
+                    raise RuntimeError("Higher taxon {label} not found")
+                else:
+                    reprocess = True
+            else:
+                cdef.must_taxa.update(des_cdef.must_taxa)
+        else:
+            cdef.must_taxa.add(nd.taxon)
+    return reprocess
+
+
+def _fill_might_taxa(
+    cdef, missing_from_tree, tip_label_2_nd, clade_name_to_def, strict
+):
+    reprocess = False
+    for label in cdef.might:
+        if label in missing_from_tree:
+            continue
+        nd = tip_label_2_nd.get(label)
+        if nd is None:
+            des_cdef = clade_name_to_def.get(label)
+            if des_cdef is None:
+                if len(label.split()) == 2:
+                    missing_from_tree.add(label)
+                elif strict:
+                    raise RuntimeError(f"Higher taxon {label} not found")
+                else:
+                    reprocess = True
+            else:
+                cdef.might_taxa.update(des_cdef.must_taxa)
+                cdef.might_taxa.update(des_cdef.might_taxa)
+        else:
+            cdef.might_taxa.add(nd.taxon)
+    return reprocess
+
+
 def link_cdef_to_taxa(cdefs_by_rank, tip_label_2_nd):
     missing_from_tree = set()
     clade_name_to_def = {}
     for cdef_list in cdefs_by_rank:
+        reprocess_list = []
         for cdef in cdef_list:
             cdef.must_taxa = set()
-            for label in cdef.must:
-                if label in missing_from_tree:
-                    continue
-                nd = tip_label_2_nd.get(label)
-                if nd is None:
-                    des_cdef = clade_name_to_def.get(label)
-                    if des_cdef is None:
-                        missing_from_tree.add(label)
-                    else:
-                        cdef.must_taxa.update(des_cdef.must_taxa)
-                else:
-                    cdef.must_taxa.add(nd.taxon)
+            if _fill_must_taxa(
+                cdef, missing_from_tree, tip_label_2_nd, clade_name_to_def, strict=False
+            ):
+                reprocess_list.append(cdef)
             cdef.might_taxa = set()
-            for label in cdef.might:
-                if label in missing_from_tree:
-                    continue
-                nd = tip_label_2_nd.get(label)
-                if nd is None:
-                    des_cdef = clade_name_to_def.get(label)
-                    if des_cdef is None:
-                        missing_from_tree.add(label)
-                    else:
-                        cdef.might_taxa.update(des_cdef.must_taxa)
-                        cdef.might_taxa.update(des_cdef.might_taxa)
-                else:
-                    cdef.might_taxa.add(nd.taxon)
+            if _fill_might_taxa(
+                cdef, missing_from_tree, tip_label_2_nd, clade_name_to_def, strict=False
+            ):
+                reprocess_list.append(cdef)
             clade_name_to_def[cdef.name] = cdef
+        for cdef in reprocess_list:
+            _fill_must_taxa(
+                cdef, missing_from_tree, tip_label_2_nd, clade_name_to_def, strict=True
+            )
+            _fill_might_taxa(
+                cdef, missing_from_tree, tip_label_2_nd, clade_name_to_def, strict=True
+            )
     return missing_from_tree
 
 
@@ -79,6 +117,8 @@ def _eval_one_clade(tree, cdef, clades, tip_label_2_nd):
         nls = set(curr_nd.bipartition.leafset_taxa(tree.taxon_namespace))
         nld = nls.difference(cdef.must_taxa)
         if not nld.issubset(cdef.might_taxa):
+            nldt = [i.label for i in nld]
+            info(f"Clade {cdef.name} not found due to intrusion of {nldt}")
             return False, curr_nd
         if cdef.must_taxa.issubset(nls):
             return True, curr_nd
@@ -94,6 +134,10 @@ def _link_existing_clades(tree, cdefs_by_rank, clades, tip_label_2_nd):
             if is_in_tree:
                 found[cdef.name] = nd
                 cdef.node = nd
+                if hasattr(nd, "clade_names"):
+                    nd.clade_names.append(cdef.name)
+                else:
+                    nd.clade_names = [cdef.name]
             else:
                 not_found[cdef.name] = nd
                 cdef.conflicting = nd
@@ -122,6 +166,10 @@ def label_internals(tree, clades):
     found, not_found = _link_existing_clades(
         tree, cdefs_by_rank, clades, tip_label_2_nd
     )
+    info(f"{(len(not_found))} clades broken.")
+    info(f"{(len(found))} clades found:")
+    for c in found:
+        info(f"  {c} found")
 
 
 def prune_taxa_without_sp_data(

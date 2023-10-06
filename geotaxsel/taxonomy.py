@@ -35,11 +35,11 @@ def rank_str_to_rank(s):
 
 
 class CladeDef(object):
-    def __init__(self, mrca_of=None, incertae_sedis=None, rank=None):
+    def __init__(self, mrca_of=None, incertae_sedis=None, rank=None, name=None):
         self.must = set()
         self.might = set()
         self.rank = rank
-        self.name = None
+        self.name = name
         if mrca_of:
             self.must.update(mrca_of)
         if incertae_sedis:
@@ -231,7 +231,8 @@ def _process_incertae_sedis(data_row, clades_dict):
         clade_def = clades_dict[key4superis]
         for subc in clade_def.must:
             sc = clades_dict[subc]
-            sc.add_possible(family)
+            if sc.name != family:
+                sc.add_possible(family)
     if is_inc_sedis(subfamily):
         assert not is_null(family)
         clade_def = clades_dict[family]
@@ -242,7 +243,8 @@ def _process_incertae_sedis(data_row, clades_dict):
             val4fam = genus
         for subc in clade_def.must:
             sc = clades_dict[subc]
-            sc.add_possible(val4fam)
+            if sc.name != val4fam:
+                sc.add_possible(val4fam)
     if is_inc_sedis(subgenus):
         assert not is_null(genus)
         clade_def = clades_dict[genus]
@@ -252,7 +254,8 @@ def _process_incertae_sedis(data_row, clades_dict):
             except KeyError:
                 pass
             else:
-                sc.add_possible(sci_name)
+                if sc.name != sci_name:
+                    sc.add_possible(sci_name)
     if is_inc_sedis(subfamily):
         assert not is_null(family)
         clade_def = clades_dict[family]
@@ -263,7 +266,12 @@ def _process_incertae_sedis(data_row, clades_dict):
             val4fam = genus
         for subc in clade_def.must:
             sc = clades_dict[subc]
-            sc.add_possible(val4fam)
+            if sc.name != val4fam:
+                sc.add_possible(val4fam)
+
+
+def _add_sub_c(curr_dict, key, new_value):
+    curr_dict.setdefault(key, CladeDef(name=key)).add(new_value)
 
 
 def _process_row_into_cbr(row, clades_by_rank, incertae_sedis_rows):
@@ -308,7 +316,7 @@ def _process_row_into_cbr(row, clades_by_rank, incertae_sedis_rows):
     assert not is_null(genus.upper())
     # Register Subclass clade
     subclass_d = clades_by_rank[Ranks.SUBCLASS.value]
-    subclass_d.setdefault(subclass, CladeDef()).add(infraclass)
+    _add_sub_c(subclass_d, subclass, infraclass)
 
     # Register Infraclass clade
     infraclass_d = clades_by_rank[Ranks.INFRACLASS.value]
@@ -316,16 +324,19 @@ def _process_row_into_cbr(row, clades_by_rank, incertae_sedis_rows):
         key4infra = magnorder
     else:
         key4infra = order if is_null(superorder) else superorder
-    infraclass_d.setdefault(infraclass, CladeDef()).add(key4infra)
+    _add_sub_c(infraclass_d, infraclass, key4infra)
+
     # Register Magnaorder clade
     if not is_null(magnorder):
         magnorder_d = clades_by_rank[Ranks.MAGNORDER.value]
         key4magna = order if is_null(superorder) else superorder
-        magnorder_d.setdefault(magnorder, CladeDef()).add(key4magna)
+        _add_sub_c(magnorder_d, magnorder, key4magna)
+
     # Register Superorder clade
     if not is_null(superorder):
         superorder_d = clades_by_rank[Ranks.SUPERORDER.value]
-        superorder_d.setdefault(superorder, CladeDef()).add(order)
+        _add_sub_c(superorder_d, superorder, order)
+
     # Register Order clade
     order_d = clades_by_rank[Ranks.ORDER.value]
     if not is_null(suborder):
@@ -338,7 +349,7 @@ def _process_row_into_cbr(row, clades_by_rank, incertae_sedis_rows):
                 key4order = parvorder
             else:
                 key4order = family if is_null(superfamily) else superfamily
-    order_d.setdefault(order, CladeDef()).add(key4order)
+    _add_sub_c(order_d, order, key4order)
     # Register Suborder clade
     if not is_null(suborder):
         suborder_d = clades_by_rank[Ranks.SUBORDER.value]
@@ -349,7 +360,8 @@ def _process_row_into_cbr(row, clades_by_rank, incertae_sedis_rows):
                 key4suborder = parvorder
             else:
                 key4suborder = family if is_null(superfamily) else superfamily
-        suborder_d.setdefault(suborder, CladeDef()).add(key4suborder)
+        _add_sub_c(suborder_d, suborder, key4suborder)
+
     # Register Infraorder clade
     if not is_null(infraorder):
         infraorder_d = clades_by_rank[Ranks.INFRAORDER.value]
@@ -357,40 +369,47 @@ def _process_row_into_cbr(row, clades_by_rank, incertae_sedis_rows):
             key4infraorder = parvorder
         else:
             key4infraorder = family if is_null(superfamily) else superfamily
-        infraorder_d.setdefault(infraorder, CladeDef()).add(key4infraorder)
+        _add_sub_c(infraorder_d, infraorder, key4infraorder)
+
     # Register Parvorder clade
     if not is_null(parvorder):
         parorder_d = clades_by_rank[Ranks.PARVORDER.value]
         key4parvorder = family if is_null(superfamily) else superfamily
-        parorder_d.setdefault(parvorder, CladeDef()).add(key4parvorder)
+        _add_sub_c(parorder_d, parvorder, key4parvorder)
+
     # Register Superfamily clade
     if not is_null(superfamily):
         superfamily_d = clades_by_rank[Ranks.SUPERFAMILY.value]
-        superfamily_d.setdefault(superfamily, CladeDef()).add(family)
+        _add_sub_c(superfamily_d, superfamily, family)
+
     # Register Family clade
     family_d = clades_by_rank[Ranks.FAMILY.value]
     if not is_null(subfamily):
         key4family = subfamily
     else:
         key4family = genus if is_null(tribe) else tribe
-    family_d.setdefault(family, CladeDef()).add(key4family)
+    _add_sub_c(family_d, family, key4family)
+
     # Register Subfamily clade
     if not is_null(subfamily):
         subfamily_d = clades_by_rank[Ranks.SUBFAMILY.value]
         key4subfamily = genus if is_null(tribe) else tribe
-        subfamily_d.setdefault(subfamily, CladeDef()).add(key4subfamily)
+        _add_sub_c(subfamily_d, subfamily, key4subfamily)
+
     # Register Subfamily clade
     if not is_null(tribe):
         tribe_d = clades_by_rank[Ranks.TRIBE.value]
-        tribe_d.setdefault(tribe, CladeDef()).add(genus)
+        _add_sub_c(tribe_d, tribe, genus)
     # Register Genus clade
     genus_d = clades_by_rank[Ranks.GENUS.value]
     key4genus = sci_name if is_null(subgenus) else f"{genus } subgenus {subgenus}"
-    genus_d.setdefault(genus, CladeDef()).add(key4genus)
+    _add_sub_c(genus_d, genus, key4genus)
+
     # Register Subgenus clade
     if not is_null(subgenus):
         subgenus_d = clades_by_rank[Ranks.SUBGENUS.value]
-        subgenus_d.setdefault(f"{genus } subgenus {subgenus}", CladeDef()).add(sci_name)
+        rsubgenus = f"{genus } subgenus {subgenus}"
+        _add_sub_c(subgenus_d, rsubgenus, sci_name)
 
 
 _pref_pat = r"^\s*CladeDef\(\s*mrca_of\s*=\s*\{([^}]+)\}\s*"
