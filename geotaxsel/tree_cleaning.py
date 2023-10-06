@@ -2,6 +2,7 @@
 import re
 import itertools
 from .logs import info
+from .taxonomy import Ranks
 
 
 def tips_from_clades(clades):
@@ -30,6 +31,97 @@ def alert_pruning(msg, to_prune):
     info(f"Will prune {len(to_prune)}: {msg}")
     for el in to_prune:
         info(f'  "{el}"')
+
+
+def link_cdef_to_taxa(cdefs_by_rank, tip_label_2_nd):
+    missing_from_tree = set()
+    clade_name_to_def = {}
+    for cdef_list in cdefs_by_rank:
+        for cdef in cdef_list:
+            cdef.must_taxa = set()
+            for label in cdef.must:
+                if label in missing_from_tree:
+                    continue
+                nd = tip_label_2_nd.get(label)
+                if nd is None:
+                    des_cdef = clade_name_to_def.get(label)
+                    if des_cdef is None:
+                        missing_from_tree.add(label)
+                    else:
+                        cdef.must_taxa.update(des_cdef.must_taxa)
+                else:
+                    cdef.must_taxa.add(nd.taxon)
+            cdef.might_taxa = set()
+            for label in cdef.might:
+                if label in missing_from_tree:
+                    continue
+                nd = tip_label_2_nd.get(label)
+                if nd is None:
+                    des_cdef = clade_name_to_def.get(label)
+                    if des_cdef is None:
+                        missing_from_tree.add(label)
+                    else:
+                        cdef.might_taxa.update(des_cdef.must_taxa)
+                        cdef.might_taxa.update(des_cdef.might_taxa)
+                else:
+                    cdef.might_taxa.add(nd.taxon)
+            clade_name_to_def[cdef.name] = cdef
+    return missing_from_tree
+
+
+def _eval_one_clade(tree, cdef, clades, tip_label_2_nd):
+    if not cdef.must_taxa:
+        return False, None
+    one_taxon = next(iter(cdef.must_taxa))
+    one_leaf = tip_label_2_nd[one_taxon.label]
+    curr_nd = one_leaf
+    while True:
+        nls = set(curr_nd.bipartition.leafset_taxa(tree.taxon_namespace))
+        nld = nls.difference(cdef.must_taxa)
+        if not nld.issubset(cdef.might_taxa):
+            return False, curr_nd
+        if cdef.must_taxa.issubset(nls):
+            return True, curr_nd
+        curr_nd = curr_nd.parent_node
+        assert curr_nd is not None
+
+
+def _link_existing_clades(tree, cdefs_by_rank, clades, tip_label_2_nd):
+    found, not_found = {}, {}
+    for cdef_list in cdefs_by_rank:
+        for cdef in cdef_list:
+            is_in_tree, nd = _eval_one_clade(tree, cdef, clades, tip_label_2_nd)
+            if is_in_tree:
+                found[cdef.name] = nd
+                cdef.node = nd
+            else:
+                not_found[cdef.name] = nd
+                cdef.conflicting = nd
+    return found, not_found
+
+
+def label_internals(tree, clades):
+    tip_label_2_nd = {}
+    for leaf in tree.leaf_node_iter():
+        assert leaf.taxon.label not in tip_label_2_nd
+        tip_label_2_nd[leaf.taxon.label] = leaf
+    max_rank_v = max([i.value for i in Ranks])
+    cdefs_by_rank = [[] for i in range(1 + max_rank_v)]
+    for name, cdef in clades.items():
+        cdef.name = name
+        assert cdef.rank  # May not always hold, but should for mammal taxonomy from MDD
+        cdefs_by_rank[cdef.rank.value].append(cdef)
+    cdefs_by_rank.reverse()
+    missing_from_tree = link_cdef_to_taxa(cdefs_by_rank, tip_label_2_nd)
+    if missing_from_tree:
+        info(
+            f"{len(missing_from_tree)} taxa in clade definitions, but not in the tree:"
+        )
+        for el in missing_from_tree:
+            info(f'  "{el}"')
+    found, not_found = _link_existing_clades(
+        tree, cdefs_by_rank, clades, tip_label_2_nd
+    )
 
 
 def prune_taxa_without_sp_data(
@@ -88,4 +180,5 @@ def prune_taxa_without_sp_data(
     tree.prune_taxa(to_prune)
     if clades:
         tree.encode_bipartitions()
+        label_internals(tree, clades)
     sys.exit("early")

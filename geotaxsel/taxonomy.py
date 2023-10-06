@@ -39,6 +39,7 @@ class CladeDef(object):
         self.must = set()
         self.might = set()
         self.rank = rank
+        self.name = None
         if mrca_of:
             self.must.update(mrca_of)
         if incertae_sedis:
