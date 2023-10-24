@@ -182,11 +182,10 @@ def parse_name_updating(name_updating_fp):
     return mapping
 
 
-def parse_geo_and_tree(
+def parse_geo(
     country_name_fp,
     centroid_fp,
     name_mapping_fp,
-    tree_fp,
     clade_defs_fp,
     name_updating_fp=None,
 ):
@@ -195,7 +194,6 @@ def parse_geo_and_tree(
     clades = parse_clade_defs(clade_defs_fp)
     if clades:
         info(f"{len(clades)} clade definitions read")
-    tree = dendropy.Tree.get(path=tree_fp, schema="nexus")
     if country_name_fp is not None:
         countries = read_country_names(country_name_fp)
         countries = frozenset(countries)
@@ -207,7 +205,27 @@ def parse_geo_and_tree(
         upham_to_iucn = None
     sp_by_name = read_centroids(centroid_fp, countries)
     info(f"{len(sp_by_name)} centroids read")
+    return sp_by_name, clades, upham_to_iucn, new_names_for_leaves
 
+
+def parse_geo_and_tree(
+    country_name_fp,
+    centroid_fp,
+    name_mapping_fp,
+    tree_fp,
+    clade_defs_fp,
+    name_updating_fp=None,
+    sp_pat_in_tree=None,
+):
+    geo_ret = parse_geo(
+        country_name_fp=country_name_fp,
+        centroid_fp=centroid_fp,
+        name_mapping_fp=name_mapping_fp,
+        clade_defs_fp=clade_defs_fp,
+        name_updating_fp=name_updating_fp,
+    )
+    sp_by_name, clades, upham_to_iucn, new_names_for_leaves = geo_ret
+    tree = dendropy.Tree.get(path=tree_fp, schema="nexus")
     prune_taxa_without_sp_data(
         tree,
         frozenset(sp_by_name.keys()),
@@ -216,5 +234,6 @@ def parse_geo_and_tree(
         centroid_fp=centroid_fp,
         clades=clades,
         new_names_for_leaves=new_names_for_leaves,
+        sp_pat_in_tree=sp_pat_in_tree,
     )
     return tree, sp_by_name

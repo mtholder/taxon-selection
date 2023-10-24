@@ -54,7 +54,7 @@ def tip_to_root_dist(nd, root):
     return t
 
 
-def ultrametric_greedy_mmd(tree, num_taxa, sp_by_name, cut_branches_fp):
+def ultrametric_greedy_mmd(tree, num_taxa, sp_by_name):
     tree.calc_node_ages(ultrametricity_precision=5e-5)
     # for nd in tree.ageorder_node_iter(descending=True):
     #     if nd.is_leaf():
@@ -81,11 +81,7 @@ def ultrametric_greedy_mmd(tree, num_taxa, sp_by_name, cut_branches_fp):
         raise NotImplementedError(
             "Polytomy caused num_taxa to be exceeded need to check last_added and remove some..."
         )
-
-    output_chosen_anc(tree, cut_branches_fp, chosen_ancs)
-    import sys
-
-    sys.exit("early exit\n")
+    return chosen_ancs
 
 
 def subtree_name(nd, mrca_notation=True):
@@ -111,34 +107,6 @@ def anc_name(nd):
     if hasattr(par, "clade_names"):
         return par.clade_names[0]
     return anc_name(par)
-
-
-def output_chosen_anc(tree, cut_branches_fp, chosen_ancs):
-    if not cut_branches_fp:
-        return
-    with open(cut_branches_fp, "w") as outp:
-        outp.write(
-            "dist-to-root\tdist-to-tips\tnum-leaves\tname-or-mrca\tancestral-clade\n"
-        )
-        prod = 1
-        for nd in chosen_ancs:
-            t2rd = tip_to_root_dist(nd, tree.seed_node)
-            leaves_below = list(nd.leaf_nodes())
-            nl = len(leaves_below)
-            prod *= nl
-            nm = subtree_name(nd)
-            ancnm = anc_name(nd)
-            outp.write(f"{t2rd}\t{nd.age}\t{nl}\t{nm}\t{ancnm}\n")
-        prod_str = str(prod)
-        pow_10 = len(prod_str) - 1
-        if pow_10 > 9:
-            cut_prod_str = prod_str[:7]
-            dec_str = f"{cut_prod_str[0]}.{cut_prod_str[1:]}"
-            parens_str = f" (about {dec_str}E{pow_10})"
-        else:
-            parens_str = ""
-        msg = f"{prod_str}{parens_str} total choices of {len(chosen_ancs)} that maximize PD."
-        info(msg)
 
 
 def greedy_mmd(tree, num_taxa, sp_by_name):
@@ -214,3 +182,47 @@ def greedy_mmd(tree, num_taxa, sp_by_name):
         curr_locs.append(sel_loc)
     debug("Taxa selected, cleaning up...")
     return sel_tax_labels
+
+
+def output_chosen_anc(tree, cut_branches_fp, chosen_ancs):
+    if not cut_branches_fp:
+        return
+    single_mode = True
+    if tree is None:
+        single_mode = False
+        header = "num-leaves\tnum-times-selected\tnames\n"
+    else:
+        header = (
+            "dist-to-root\tdist-to-tips\tnum-leaves\tname-or-mrca\tancestral-clade\n"
+        )
+
+    if single_mode:
+        with open(cut_branches_fp, "w") as outp:
+            outp.write(header)
+            prod = 1
+            for nd in chosen_ancs:
+                t2rd = tip_to_root_dist(nd, tree.seed_node)
+                leaves_below = list(nd.leaf_nodes())
+                nl = len(leaves_below)
+                prod *= nl
+                nm = subtree_name(nd)
+                ancnm = anc_name(nd)
+                outp.write(f"{t2rd}\t{nd.age}\t{nl}\t{nm}\t{ancnm}\n")
+            prod_str = str(prod)
+            pow_10 = len(prod_str) - 1
+            if pow_10 > 9:
+                cut_prod_str = prod_str[:7]
+                dec_str = f"{cut_prod_str[0]}.{cut_prod_str[1:]}"
+                parens_str = f" (about {dec_str}E{pow_10})"
+            else:
+                parens_str = ""
+            msg = f"{prod_str}{parens_str} total choices of {len(chosen_ancs)} that maximize PD."
+            info(msg)
+    else:
+        with open(cut_branches_fp, "w") as outp:
+            outp.write(header)
+            for k, v in chosen_ancs.items():
+                lk = list(k)
+                lk.sort()
+                lf = ", ".join(lk)
+                outp.write(f"{len(lk)}\t{v}\t{lf}\n")

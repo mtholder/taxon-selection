@@ -1,20 +1,103 @@
 #!/usr/bin/env python
 import argparse
 import sys
-from geotaxsel import greedy_mmd, parse_geo_and_tree, ultrametric_greedy_mmd
+import os
+import re
+from geotaxsel import (
+    greedy_mmd,
+    output_chosen_anc,
+    parse_geo_and_tree,
+    parse_geo,
+    prune_taxa_without_sp_data,
+    ultrametric_greedy_mmd,
+)
+import dendropy
+
+
+def record_clade_sel(sel, rep_selections):
+    for anc in sel:
+        leaves_below = list(anc.leaf_nodes())
+        labels_below = frozenset([i.taxon.label for i in leaves_below])
+        pn = rep_selections.get(labels_below, 0)
+        rep_selections[labels_below] = 1 + pn
+
+
+def run_tree_dir(
+    country_name_fp,
+    centroid_fp,
+    name_mapping_fp,
+    num_to_select,
+    use_ultrametricity=True,
+    clade_defs_fp=None,
+    name_updating_fp=None,
+    cut_branches_fp=None,
+    tree_dir=None,
+):
+    geo_ret = parse_geo(
+        country_name_fp=country_name_fp,
+        centroid_fp=centroid_fp,
+        name_mapping_fp=name_mapping_fp,
+        clade_defs_fp=clade_defs_fp,
+        name_updating_fp=name_updating_fp,
+    )
+    sp_by_name, clades, upham_to_iucn, new_names_for_leaves = geo_ret
+    file_names = os.listdir(tree_dir)
+    file_names.sort()
+    sp_pat = re.compile("^([A-Z][a-z]+ +[-a-z0-9]+)$")
+    rep_selections = {}
+    for tree_n, el in enumerate(file_names):
+        tree_fp = os.path.join(tree_dir, el)
+        tree = dendropy.Tree.get(path=tree_fp, schema="newick")
+        print(tree_fp)
+        prune_taxa_without_sp_data(
+            tree,
+            frozenset(sp_by_name.keys()),
+            upham_to_iucn=upham_to_iucn,
+            name_mapping_fp=name_mapping_fp,
+            centroid_fp=centroid_fp,
+            clades=clades,
+            new_names_for_leaves=new_names_for_leaves,
+            sp_pat_in_tree=sp_pat,
+        )
+        if use_ultrametricity:
+            sel = ultrametric_greedy_mmd(tree, num_to_select, sp_by_name)
+        else:
+            sel = greedy_mmd(tree, num_to_select, sp_by_name)
+        record_clade_sel(sel, rep_selections)
+        if tree_n > 99:
+            break
+    output_chosen_anc(
+        tree=None, cut_branches_fp=cut_branches_fp, chosen_ancs=rep_selections
+    )
+    return
 
 
 def run(
     country_name_fp,
     centroid_fp,
     name_mapping_fp,
-    tree_fp,
     num_to_select,
+    tree_fp=None,
     use_ultrametricity=True,
     clade_defs_fp=None,
     name_updating_fp=None,
     cut_branches_fp=None,
+    tree_dir=None,
 ):
+    if tree_dir is not None:
+        return run_tree_dir(
+            country_name_fp=country_name_fp,
+            centroid_fp=centroid_fp,
+            name_mapping_fp=name_mapping_fp,
+            num_to_select=num_to_select,
+            use_ultrametricity=use_ultrametricity,
+            clade_defs_fp=clade_defs_fp,
+            name_updating_fp=name_updating_fp,
+            cut_branches_fp=cut_branches_fp,
+            tree_dir=tree_dir,
+        )
+    sp_pat = re.compile("^([A-Z][a-z]+ +[-a-z0-9]+) [A-Z][A-Za-z]+ [A-Z]+$")
+    assert tree_fp is not None
     tree, sp_by_name = parse_geo_and_tree(
         country_name_fp,
         centroid_fp,
@@ -22,11 +105,14 @@ def run(
         tree_fp,
         clade_defs_fp=clade_defs_fp,
         name_updating_fp=name_updating_fp,
+        sp_pat_in_tree=sp_pat,
     )
     if use_ultrametricity:
-        sel = ultrametric_greedy_mmd(tree, num_to_select, sp_by_name, cut_branches_fp)
+        sel = ultrametric_greedy_mmd(tree, num_to_select, sp_by_name)
     else:
         sel = greedy_mmd(tree, num_to_select, sp_by_name)
+    output_chosen_anc(tree, cut_branches_fp, sel)
+    sys.exit("early exit\n")
     print("Selected:\n  {}\n".format("\n  ".join(sel)))
     return
 
@@ -82,9 +168,16 @@ def main():
     parser.add_argument(
         "--tree-file",
         default=None,
-        required=True,
+        required=False,
         help="path to NEXUS file with a single ultrametric tree",
     )
+    parser.add_argument(
+        "--tree-dir",
+        default=None,
+        required=False,
+        help="path to directory with alternative Newick files, each with a single ultrametric tree",
+    )
+
     parser.add_argument(
         "--num-to-select", default=2, type=int, help="the number of taxa to select"
     )
@@ -103,6 +196,10 @@ def main():
     else:
         if args.country_file is None:
             sys.exit("--country-file and --name-mapping-file must be used together.\n")
+    if (args.tree_file is None) and (args.tree_dir is None):
+        sys.exit("Either --tree-file or --tree-dir must be supplied.\n")
+    if (args.tree_file is not None) and (args.tree_dir is not None):
+        sys.exit("Only 1 of --tree-file or --tree-dir can be supplied.\n")
     run(
         country_name_fp=args.country_file,
         centroid_fp=args.centroid_file,
@@ -113,6 +210,7 @@ def main():
         clade_defs_fp=args.clade_defs_file,
         name_updating_fp=args.name_updating_file,
         cut_branches_fp=args.cut_branches_file,
+        tree_dir=args.tree_dir,
     )
 
 

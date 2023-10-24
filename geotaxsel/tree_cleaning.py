@@ -189,6 +189,7 @@ def prune_taxa_without_sp_data(
     centroid_fp="",
     clades=None,
     new_names_for_leaves=None,
+    sp_pat_in_tree=None,
 ):
     info(
         f"prune_taxa_without_sp_data(tree, sp_w_data, upham_to_iucn={upham_to_iucn}...)"
@@ -198,7 +199,6 @@ def prune_taxa_without_sp_data(
         new_names_for_leaves = {}
     taxa_list = [i for i in tree.taxon_namespace]
     to_prune = []
-    sp_pat = re.compile("^([A-Z][a-z]+ +[-a-z0-9]+) [A-Z][A-Za-z]+ [A-Z]+$")
     bad_names = []
     no_geo = []
     null_name_mapped = []
@@ -206,7 +206,7 @@ def prune_taxa_without_sp_data(
     remapped = []
     final_name_set = set()
     for n, i in enumerate(taxa_list):
-        m = sp_pat.match(i.label)
+        m = sp_pat_in_tree.match(i.label)
         if not m:
             to_prune.append(i)
             bad_names.append(i.label)
