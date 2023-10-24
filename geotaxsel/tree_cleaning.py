@@ -190,6 +190,9 @@ def prune_taxa_without_sp_data(
     clades=None,
     new_names_for_leaves=None,
 ):
+    info(
+        f"prune_taxa_without_sp_data(tree, sp_w_data, upham_to_iucn={upham_to_iucn}...)"
+    )
     clade_tips = tips_from_clades(clades) if clades else set()
     if new_names_for_leaves is None:
         new_names_for_leaves = {}
@@ -201,6 +204,7 @@ def prune_taxa_without_sp_data(
     null_name_mapped = []
     not_in_clades = []
     remapped = []
+    final_name_set = set()
     for n, i in enumerate(taxa_list):
         m = sp_pat.match(i.label)
         if not m:
@@ -226,6 +230,7 @@ def prune_taxa_without_sp_data(
             to_prune.append(i)
             not_in_clades.append(final_name)
         else:
+            final_name_set.add(final_name)
             i.label = final_name
     info(f"{len(remapped)} tip names updated to new taxonomy:")
     for from_n, to_n in remapped:
@@ -238,3 +243,10 @@ def prune_taxa_without_sp_data(
     if clades:
         tree.encode_bipartitions()
         label_internals(tree, clades)
+    centroids_but_no_tips = set()
+    for sp_name in sp_w_data:
+        if sp_name not in final_name_set:
+            centroids_but_no_tips.add(sp_name)
+    info(f"{len(centroids_but_no_tips)} species in centroid file but not in the tree.")
+    for sp_name in centroids_but_no_tips:
+        info(f"  {sp_name}")
