@@ -20,6 +20,8 @@ Data setup:
     cd ..
     mkdir data
 
+That tree was linked from https://vertlife.org/data/mammals/
+
 Then copy `outfile_rmDups_filtered_4Holder_v4.csv` into `data`
 
 Every session:
@@ -55,7 +57,7 @@ Has been tested with DendroPy-4.6.1 and geopy-2.4.0 and Python 3.10.12 on Ubuntu
      species names
   * "Will prune X: not found in data/outfile_rmDups_filtered_4Holder_v4.csv" refers to tips in the tree
      not found in the centroid file. So these are pruned. *Pruning may not be the right choice*
-  * "Will prune X: not found in any clade in clade definitions" tips not found in MDD. that make it tough to use
+  * "Will prune X: not found in any clade in clade definitions" tips not found in MDD. that make it tough to
     use clade names in output. **We probably *DON'T* want to prune these in the final analysis**
   * "X taxa in clade definitions, but not in the tree:" refers to species in MDD but not the tree.
   * then comes a list of taxa in MDD that are not monophyletic in the tree
