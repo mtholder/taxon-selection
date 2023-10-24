@@ -3,6 +3,7 @@ import argparse
 import sys
 import os
 import re
+
 from geotaxsel import (
     greedy_mmd,
     output_chosen_anc,
@@ -10,6 +11,8 @@ from geotaxsel import (
     parse_geo,
     prune_taxa_without_sp_data,
     ultrametric_greedy_mmd,
+    info,
+    choose_most_common,
 )
 import dendropy
 
@@ -32,6 +35,7 @@ def run_tree_dir(
     name_updating_fp=None,
     cut_branches_fp=None,
     tree_dir=None,
+    ultrametric_tol=5e-5,
 ):
     geo_ret = parse_geo(
         country_name_fp=country_name_fp,
@@ -60,14 +64,20 @@ def run_tree_dir(
             sp_pat_in_tree=sp_pat,
         )
         if use_ultrametricity:
-            sel = ultrametric_greedy_mmd(tree, num_to_select, sp_by_name)
+            sel = ultrametric_greedy_mmd(
+                tree, num_to_select, sp_by_name, ultrametric_tol=ultrametric_tol
+            )
         else:
             sel = greedy_mmd(tree, num_to_select, sp_by_name)
         record_clade_sel(sel, rep_selections)
-        if tree_n > 99:
+        if tree_n > 999:
             break
+    final = choose_most_common(rep_selections, num_to_select, num_trees=1 + tree_n)
     output_chosen_anc(
-        tree=None, cut_branches_fp=cut_branches_fp, chosen_ancs=rep_selections
+        tree=None,
+        cut_branches_fp=cut_branches_fp,
+        chosen_ancs=final,
+        label_sets_to_freq=rep_selections,
     )
     return
 
@@ -83,6 +93,7 @@ def run(
     name_updating_fp=None,
     cut_branches_fp=None,
     tree_dir=None,
+    ultrametric_tol=5e-5,
 ):
     if tree_dir is not None:
         return run_tree_dir(
@@ -95,6 +106,7 @@ def run(
             name_updating_fp=name_updating_fp,
             cut_branches_fp=cut_branches_fp,
             tree_dir=tree_dir,
+            ultrametric_tol=ultrametric_tol,
         )
     sp_pat = re.compile("^([A-Z][a-z]+ +[-a-z0-9]+) [A-Z][A-Za-z]+ [A-Z]+$")
     assert tree_fp is not None
@@ -108,7 +120,9 @@ def run(
         sp_pat_in_tree=sp_pat,
     )
     if use_ultrametricity:
-        sel = ultrametric_greedy_mmd(tree, num_to_select, sp_by_name)
+        sel = ultrametric_greedy_mmd(
+            tree, num_to_select, sp_by_name, ultrametric_tol=ultrametric_tol
+        )
     else:
         sel = greedy_mmd(tree, num_to_select, sp_by_name)
     output_chosen_anc(tree, cut_branches_fp, sel)
@@ -189,6 +203,12 @@ def main():
         "Note that all input trees must be ultrametric, but some algorithms "
         "exploit this more effectively. Using these flags turns off these algorithms",
     )
+    parser.add_argument(
+        "--ultrametricity-tol",
+        default=5e-5,
+        type=float,
+        help="precision for checking that the trees are ultrametric. Set this higher if you think that rounding error is causing your trees to be rejected as non-ultrametric",
+    )
     args = parser.parse_args(sys.argv[1:])
     if args.name_mapping_file is None:
         if args.country_file is not None:
@@ -200,6 +220,8 @@ def main():
         sys.exit("Either --tree-file or --tree-dir must be supplied.\n")
     if (args.tree_file is not None) and (args.tree_dir is not None):
         sys.exit("Only 1 of --tree-file or --tree-dir can be supplied.\n")
+    if args.ultrametricity_tol < 0.0:
+        sys.exit("--ultrametricity-tol cannot be negative")
     run(
         country_name_fp=args.country_file,
         centroid_fp=args.centroid_file,
@@ -211,6 +233,7 @@ def main():
         name_updating_fp=args.name_updating_file,
         cut_branches_fp=args.cut_branches_file,
         tree_dir=args.tree_dir,
+        ultrametric_tol=args.ultrametricity_tol,
     )
 
 

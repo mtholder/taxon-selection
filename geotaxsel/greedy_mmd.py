@@ -54,8 +54,8 @@ def tip_to_root_dist(nd, root):
     return t
 
 
-def ultrametric_greedy_mmd(tree, num_taxa, sp_by_name):
-    tree.calc_node_ages(ultrametricity_precision=5e-5)
+def ultrametric_greedy_mmd(tree, num_taxa, sp_by_name, ultrametric_tol=5e-5):
+    tree.calc_node_ages(ultrametricity_precision=ultrametric_tol)
     # for nd in tree.ageorder_node_iter(descending=True):
     #     if nd.is_leaf():
     #         print(f"{nd.taxon.label} -> root = ", tip_to_root_dist(nd, tree.seed_node))

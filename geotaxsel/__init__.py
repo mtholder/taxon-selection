@@ -5,3 +5,4 @@ from .taxonomy import CladeDef, Ranks, read_taxonomy_stream
 from .geo_tree_parser import parse_geo_and_tree, parse_geo
 from .greedy_mmd import ultrametric_greedy_mmd, greedy_mmd, output_chosen_anc
 from .tree_cleaning import prune_taxa_without_sp_data
+from .label_graph import choose_most_common
