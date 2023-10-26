@@ -11,7 +11,6 @@ from geotaxsel import (
     parse_geo,
     prune_taxa_without_sp_data,
     ultrametric_greedy_mmd,
-    info,
     choose_most_common,
 )
 import dendropy
@@ -70,7 +69,7 @@ def run_tree_dir(
         else:
             sel = greedy_mmd(tree, num_to_select, sp_by_name)
         record_clade_sel(sel, rep_selections)
-        if tree_n > 999:
+        if tree_n > 9:
             break
     final = choose_most_common(rep_selections, num_to_select, num_trees=1 + tree_n)
     output_chosen_anc(
