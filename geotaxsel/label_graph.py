@@ -17,6 +17,46 @@ class CCResolution(object):
         return self._score
 
 
+TEST_ANSWER = set(
+    [
+        frozenset({"Microgale pusilla"}),
+        frozenset({"Limnogale mergulus"}),
+        frozenset({"Microgale cowani"}),
+        frozenset({"Microgale talazaci"}),
+        frozenset({"Microgale gymnorhyncha"}),
+        frozenset({"Microgale thomasi"}),
+        frozenset({"Microgale drouhardi"}),
+        frozenset({"Microgale jenkinsae"}),
+        frozenset({"Microgale parvula"}),
+        frozenset({"Microgale brevicaudata"}),
+        frozenset({"Microgale grandidieri"}),
+        frozenset({"Microgale dobsoni"}),
+        frozenset({"Microgale taiva"}),
+        frozenset({"Microgale fotsifotsy"}),
+        frozenset({"Microgale dryas"}),
+        frozenset({"Microgale longicaudata"}),
+        frozenset({"Microgale nasoloi"}),
+        frozenset(
+            {
+                "Microgale gracilis",
+                "Microgale monticola",
+                "Microgale majori",
+                "Microgale principula",
+                "Microgale jobihely",
+            }
+        ),
+        frozenset({"Microgale soricoides"}),
+    ]
+)
+
+
+def all_in_test(prev, ne):
+    for el in prev:
+        if el not in TEST_ANSWER:
+            return False
+    return ne in TEST_ANSWER
+
+
 class ConnectedComponent(object):
     def __init__(self, label_set=None, freq=None, leaves=None, subset_wts=None):
         self.leaves = set()
@@ -75,72 +115,148 @@ class ConnectedComponent(object):
             )
             self.add_resolution(res)
             return
-        num_trees = self._count_trees()
-        info(f"num_trees = {num_trees}")
-        # Force include any subsets in the majority
-        maj_cutoff = 1 + (num_trees // 2)
         force_inc_subsets = set()
         force_inc_leaves = set()
         sum_sc = 0
-        for subset, wt in self.subset_wts.items():
-            if wt >= maj_cutoff:
-                force_inc_subsets.add(subset)
-                assert force_inc_leaves.isdisjoint(subset)
-                force_inc_leaves.update(subset)
-                sum_sc += wt
-        info(
-            f"Maj-rule forcing: {len(force_inc_subsets)} subsest, {len(force_inc_leaves)} labels"
-        )
+
+        FORCING_MAJ_RULE = False
+        if FORCING_MAJ_RULE:
+            num_trees = self._count_trees()
+            info(f"num_trees = {num_trees}")
+            # Force include any subsets in the majority
+            maj_cutoff = 1 + (num_trees // 2)
+            for subset, wt in self.subset_wts.items():
+                if wt >= maj_cutoff:
+                    force_inc_subsets.add(subset)
+                    assert force_inc_leaves.isdisjoint(subset)
+                    force_inc_leaves.update(subset)
+                    sum_sc += wt
+            info(
+                f"Maj-rule forcing: {len(force_inc_subsets)} subsest, {len(force_inc_leaves)} labels"
+            )
         forced = list(force_inc_subsets)
         if force_inc_leaves == self.leaves:
             res = CCResolution(subsets=forced, sum_score=sum_sc)
             self.add_resolution(res)
             return
         possible = [i for i in all_subsets if force_inc_leaves.isdisjoint(i)]
-        self._rec_fill_res(forced, force_inc_leaves, possible, sum_sc)
+        # if len(possible) == 0:
+        #     print("forced", force_inc_leaves)
+        #     print("all", self.leaves)
+        #     print("missing", self.leaves.difference(force_inc_leaves))
+        #     for el in forced:
+        #         print(f"  forced freq={self.subset_wts[el]} el=", el)
+        #     for el in all_subsets:
+        #         if el not in forced:
+        #             print(f"  poss freq={self.subset_wts[el]} el=", el)
+        try:
+            self._rec_fill_res(forced, force_inc_leaves, possible, sum_sc)
+        except AssertionError:
+            print(f"top_possible = {possible}")
+            print(f"top_forced = {forced}")
+            raise
 
-    def _rec_fill_res(self, in_sets, in_leaves, possible, sum_sc):
-        assert len(possible) > 1
-        one_poss = possible[0]
-        one_poss_label = next(iter(one_poss))
+    def _rec_fill_res(self, in_sets, in_leaves, possible, sum_sc, prev_str=""):
+        assert len(possible) > 0
+        labels_left = self.leaves.difference(in_leaves)
+        USE_MOST_FREQ = False
+        if USE_MOST_FREQ:
+            most_freq_label, most_freq_count = None, 0
+            for label in labels_left:
+                reps = sum([1 for i in possible if label in i])
+                if reps > most_freq_count:
+                    most_freq_label, most_freq_count = label, reps
+            one_poss_label = most_freq_label
+        else:
+            least_freq_label, least_freq_count = None, 1 + len(possible)
+            for label in labels_left:
+                reps = sum([1 for i in possible if label in i])
+                if reps < least_freq_count:
+                    least_freq_label, least_freq_count = label, reps
+            one_poss_label = least_freq_label
         alternatives, others = [], []
         for subset in possible:
             dest = alternatives if one_poss_label in subset else others
             dest.append(subset)
-        info(
-            f"fill res: {len(self.leaves) - len(in_leaves)} leaves, {len(alternatives)} alternatives, {len(others)} others"
-        )
-        for i in alternatives:
-            po = [o for o in others if i.isdisjoint(o)]
-            self._ind_rec_fill(
-                inc_leaves=set(in_leaves),
-                newest=i,
-                prev_subs=list(in_sets),
-                poss_others=po,
-                sum_sc=sum_sc,
-            )
+        # indent = "  " * (1 + len(in_sets))
+        # info(
+        #     f"{indent}_rfr({len(self.leaves) - len(in_leaves)} leaves more. {len(possible)} others)"
+        # )
 
-    def _ind_rec_fill(self, inc_leaves, newest, prev_subs, poss_others, sum_sc):
+        for idx, i in enumerate(alternatives):
+            next_str = f"{prev_str} ({idx} / {len(alternatives)})"
+            info(next_str)
+            po_list = [o for o in others if i.isdisjoint(o)]
+            po_ls = set(i)
+            assert po_ls.isdisjoint(in_leaves)
+            complements_in_sets = False
+            num_needed = len(self.leaves) - len(in_leaves)
+            for o in po_list:
+                po_ls.update(o)
+                if len(po_ls) >= num_needed:
+                    assert len(po_ls) == num_needed
+                    complements_in_sets = True
+                    break
+            if not complements_in_sets:
+                if all_in_test(in_sets, i):
+                    info("  REJECTING branch due to failure to complement.")
+                    print("in_sets =", in_sets)
+                    print("i =", i)
+                    print("others =", others)
+                    print("po_list =", po_list)
+                    assert False
+                continue
+            try:
+                self._ind_rec_fill(
+                    inc_leaves=set(in_leaves),
+                    newest=i,
+                    prev_subs=list(in_sets),
+                    poss_others=po_list,
+                    sum_sc=sum_sc,
+                    prev_str=next_str,
+                )
+            except AssertionError:
+                print("_rfr_in_sets =", in_sets)
+                print("_rfr_i =", i)
+                print("_rfr_others =", others)
+                print("_rfr_po_list =", po_list)
+                raise
+
+    def _ind_rec_fill(
+        self, inc_leaves, newest, prev_subs, poss_others, sum_sc, prev_str=""
+    ):
+        assert inc_leaves.isdisjoint(newest)
         inc_leaves.update(newest)
         sum_sc += self.subset_wts[newest]
         prev_subs.append(newest)
         if inc_leaves == self.leaves:
             return self.add_resolution(CCResolution(prev_subs, sum_sc))
         if not poss_others:
+            if all_in_test(prev_subs, newest):
+                assert False
             return False
-        indent = "  " * (1 + len(prev_subs))
-        info(
-            f"{indent}_cr({len(self.leaves) - len(inc_leaves)} leaves more. {len(poss_others)} others"
-        )
+        # indent = "  " * (1 + len(prev_subs))
+        # info(
+        #     f"{indent} _irfr({len(self.leaves) - len(inc_leaves)} leaves more. {len(poss_others)} others"
+        # )
         one_other = poss_others[0]
         if len(poss_others) == 1:
             inc_leaves.update(one_other)
             if inc_leaves != self.leaves:
+                if all_in_test(prev_subs, newest):
+                    assert False
                 return False
             prev_subs.append(one_other)
             sum_sc += self.subset_wts[one_other]
             return self.add_resolution(CCResolution(prev_subs, sum_sc))
-        return self._rec_fill_res(prev_subs, inc_leaves, poss_others, sum_sc)
+        try:
+            return self._rec_fill_res(
+                prev_subs, inc_leaves, poss_others, sum_sc, prev_str=prev_str
+            )
+        except AssertionError:
+            print("_irfr_prev_subs =", prev_subs)
+            print("_irfr_poss_others =", poss_others)
+            raise
 
         # others = [i for i in poss_others if inc_leaves.isdisjoint(i)]
         # ret = False
@@ -161,7 +277,7 @@ class ConnectedComponent(object):
         for x in range(self.min_num_subs, 1 + self.max_num_subs):
             res = self.resolutions.get(x)
             if res is not None:
-                out.write(f"  {x} subests, best score={res.score}\n")
+                out.write(f"  {x} subsets, best score={res.score}: {res.subsets}\n")
             else:
                 out.write(f"  {x} subsets: no resolution\n")
 

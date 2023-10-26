@@ -49,6 +49,8 @@ def run_tree_dir(
     sp_pat = re.compile("^([A-Z][a-z]+ +[-a-z0-9]+)$")
     rep_selections = {}
     for tree_n, el in enumerate(file_names):
+        if tree_n > 999:
+            break
         tree_fp = os.path.join(tree_dir, el)
         tree = dendropy.Tree.get(path=tree_fp, schema="newick")
         print(tree_fp)
@@ -69,8 +71,6 @@ def run_tree_dir(
         else:
             sel = greedy_mmd(tree, num_to_select, sp_by_name)
         record_clade_sel(sel, rep_selections)
-        if tree_n > 9:
-            break
     final = choose_most_common(rep_selections, num_to_select, num_trees=1 + tree_n)
     output_chosen_anc(
         tree=None,
