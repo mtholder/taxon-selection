@@ -145,7 +145,7 @@ class ConnectedComponent(object):
 
     def to_int_encoding(self, str_subset):
         int_encoding = 0
-        for label in self.str_leaves:
+        for label in str_subset:
             int_encoding += self.str_to_bit[label]
         return int_encoding
 
@@ -173,8 +173,11 @@ class ConnectedComponent(object):
             self.b_to_str[curr_place] = label
             self.b_leaves += curr_place
             curr_place *= 2
+        # info(f"self.str_to_bit = {self.str_to_bit}")
         for label_set, weight in self.str_subset_wts.items():
-            self.b_subset_wts[self.to_int_encoding(label_set)] = weight
+            nk = self.to_int_encoding(label_set)
+            # info(f"nk={nk} from {label_set}")
+            self.b_subset_wts[nk] = weight
 
     def fill_resolutions(self):
         if self.cache is None:
@@ -226,14 +229,14 @@ class ConnectedComponent(object):
             leaves_held |= i  # add label "i"
             i_sc = self.b_subset_wts[i]
             leaves_needed = self.b_leaves - leaves_held
+            # info(
+            #     f"{self.indent}idx={idx} of #alt={len(alternatives)} |leaves|={bin(self.b_leaves)} #others={len(others)}"
+            # )
             if not leaves_needed:
                 ires = CCResolution(in_subsets + [i], i_sc + sum_sc)
                 self.add_resolution(ires)
                 continue
             poss_other = others.intersection(self.subsets_compat_with(i))
-            # info(
-            #     f"{self.indent}idx={idx} of #alt={len(alternatives)} |leaves|={len(self.leaves)} #others={len(others)}, #po_list={len(po_list)}"
-            # )
             if not poss_other:
                 continue
             sub_cc = cc_for_subset(leaves_needed, poss_other, self)
