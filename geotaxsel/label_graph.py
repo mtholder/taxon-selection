@@ -197,7 +197,7 @@ class ConnectedComponent(object):
             scc.fill_resolutions()
             scc.write(sys.stdout)
             self.resolutions = scc.resolutions
-            for res in self.resolutions:
+            for res in self.resolutions.values():
                 res.subsets = [expand_subset_trans(i, trans_obj) for i in res.subsets]
             self.min_num_subs = scc.min_num_subs
             self.max_num_subs = scc.max_num_subs
