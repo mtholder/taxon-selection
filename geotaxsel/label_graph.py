@@ -43,6 +43,56 @@ def cc_for_subset(leaves, possible_sets, par_cc):
     return sub_cc
 
 
+def simplify_and_solve(cc):
+    assert cc.top_cc is cc  # just intended for top-level
+    to_check = set(cc.leaves)
+    nlabel_set = set(cc.leaves)
+    fmap = {}
+    rmap = {}
+    while to_check:
+        el = next(iter(to_check))
+        all_poss = set(to_check)
+        all_poss.remove(el)
+        for k in cc.subset_wts.keys():
+            if el in k:
+                all_poss.intersection_update(k)
+                if not all_poss:
+                    break
+        if all_poss:
+            all_poss.add(el)
+            new_name = f"_lg_repl_name{len(fmap)}"
+            assert new_name not in cc.leaves
+            fsap = frozenset(all_poss)
+            fmap[fsap] = new_name
+            rmap[new_name] = fsap
+            to_check = to_check.difference(fsap)
+            nlabel_set = nlabel_set.difference(fsap)
+            nlabel_set.add(new_name)
+        else:
+            to_check.remove(el)
+    new_subset_wts = {}
+    for k, sc in cc.subset_wts.items():
+        y = set(k)
+        for fk, nv in fmap.items():
+            if y.isdisjoint(fk):
+                continue
+            y = y.difference(fk)
+            y.add(nv)
+        new_subset_wts[frozenset(y)] = sc
+    scc = ConnectedComponent(leaves=frozenset(nlabel_set), subset_wts=new_subset_wts)
+    scc.simplified = True
+    return scc, rmap
+
+
+def expand_subset_trans(subset, rmap):
+    ms = set(subset)
+    for nname, group in rmap.items():
+        if nname in subset:
+            ms.remove(nname)
+            ms.update(group)
+    return frozenset(ms)
+
+
 class ConnectedComponent(object):
     def __init__(
         self, label_set=None, freq=None, leaves=None, subset_wts=None, top_cc=None
@@ -56,10 +106,12 @@ class ConnectedComponent(object):
             self.top_cc = self
             self.cache = {}
             self.compat_cache = {}
+            self.simplified = False
         else:
             self.top_cc = top_cc
             self.cache = top_cc.cache
             self.compat_cache = top_cc.compat_cache
+            self.simplified = True
 
         if label_set is None:
             assert leaves is not None
@@ -140,6 +192,16 @@ class ConnectedComponent(object):
         return least_freq_label
 
     def fill_resolutions(self):
+        if not self.simplified:
+            scc, trans_obj = simplify_and_solve(self)
+            scc.fill_resolutions()
+            scc.write(sys.stdout)
+            self.resolutions = scc.resolutions
+            for res in self.resolutions:
+                res.subsets = [expand_subset_trans(i, trans_obj) for i in res.subsets]
+            self.min_num_subs = scc.min_num_subs
+            self.max_num_subs = scc.max_num_subs
+            return
         if self.cache is None:
             self.cache = {}
             assert self.compat_cache is None
