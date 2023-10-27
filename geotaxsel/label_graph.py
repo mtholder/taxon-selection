@@ -3,6 +3,16 @@ import sys
 from .logs import info
 
 
+def int_to_bit_set(int_coded):
+    place = 1
+    ret = set()
+    while int_coded >= place:
+        if (place & int_coded) != 0:
+            ret.add(place)
+        place *= 2
+    return ret
+
+
 class CCResolution(object):
     def __init__(self, subsets, sum_score):
         self.subsets = subsets
@@ -16,13 +26,20 @@ class CCResolution(object):
     def score(self):
         return self._score
 
+    @property
+    def subsets_as_bit_sets(self):
+        bs_list = []
+        for int_el in self.subsets:
+            bs_list.append(int_to_bit_set(int_el))
+        return bs_list
+
 
 def cc_for_subset(leaves, possible_sets, par_cc):
     assert possible_sets
     assert par_cc is not None
-    psl = set()
+    psl = 0
     for po in possible_sets:
-        psl.update(po)
+        psl |= po
         if psl == leaves:
             break
     if psl != leaves:
@@ -34,9 +51,9 @@ def cc_for_subset(leaves, possible_sets, par_cc):
         return cache_hit
     nsw = {}
     for ps in possible_sets:
-        nsw[ps] = par_cc.subset_wts[ps]
+        nsw[ps] = par_cc.b_subset_wts[ps]
     cc_cc = par_cc.compat_cache
-    sub_cc = ConnectedComponent(leaves=leaves, subset_wts=nsw, top_cc=par_cc.top_cc)
+    sub_cc = ConnectedComponent(b_leaves=leaves, b_subset_wts=nsw, top_cc=par_cc.top_cc)
     sub_cc.indent = "  " + par_cc.indent
     sub_cc.fill_resolutions()
     cache[leaves] = sub_cc
@@ -45,10 +62,17 @@ def cc_for_subset(leaves, possible_sets, par_cc):
 
 class ConnectedComponent(object):
     def __init__(
-        self, label_set=None, freq=None, leaves=None, subset_wts=None, top_cc=None
+        self,
+        label_set=None,
+        freq=None,
+        leaves=None,
+        subset_wts=None,
+        top_cc=None,
+        b_leaves=None,
+        b_subset_wts=None,
     ):
-        self.leaves = set()
-        self.resolutions = {}
+        self.str_leaves = set()
+        self.resolutions = None
         self.min_num_subs = None
         self.max_num_subs = None
         self.indent = ""
@@ -61,19 +85,69 @@ class ConnectedComponent(object):
             self.cache = top_cc.cache
             self.compat_cache = top_cc.compat_cache
 
-        if label_set is None:
-            assert leaves is not None
+        self.b_leaves = None
+        self.b_subset_wts = None
+        if leaves is not None:
             assert subset_wts is not None
-            self.subset_wts = dict(subset_wts)
-            self.leaves.update(leaves)
-        else:
+            assert label_set is None
+            assert freq is None
+            assert b_leaves is None
+            assert b_subset_wts is None
+            self.str_subset_wts = dict(subset_wts)
+            self.str_leaves.update(leaves)
+        elif label_set is not None:
+            assert subset_wts is None
             assert freq is not None
-            self.subset_wts = {label_set: freq}
-            self.leaves.update(label_set)
+            assert b_leaves is None
+            assert b_subset_wts is None
+            self.str_subset_wts = {label_set: freq}
+            self.str_leaves.update(label_set)
+        else:
+            assert subset_wts is None
+            assert freq is None
+            assert b_leaves is not None
+            assert b_subset_wts is not None
+            self.b_leaves = b_leaves
+            self.b_subset_wts = b_subset_wts
+        self.str_to_bit = None
+        self.b_to_str = None
 
     def add_set(self, label_set, freq):
-        self.leaves.update(label_set)
-        self.subset_wts[label_set] = freq
+        self.str_leaves.update(label_set)
+        self.str_subset_wts[label_set] = freq
+
+    def write(self, out):
+        if not self.resolutions:
+            self.fill_resolutions()
+        out.write(f"{len(self.str_leaves)} labels, {len(self.b_subset_wts)} subsets.\n")
+        for x in range(self.min_num_subs, 1 + self.max_num_subs):
+            res = self.resolutions.get(x)
+            if res is not None:
+                ts = self.to_str_subset_list(res.subsets_as_bit_sets)
+                out.write(f"  {x} subsets, best score={res.score}: {ts}\n")
+            else:
+                out.write(f"  {x} subsets: no resolution\n")
+
+    def __hash__(self):
+        return id(self)
+
+    def __eq__(self, other):
+        return self.leaves == other.leaves and self.subset_wts == other.subset_wts
+
+    def to_str_subset_list(self, b_subset_list):
+        ret = []
+        for bit_set in b_subset_list:
+            str_set = set()
+            for el in bit_set:
+                str_set.add(self.b_to_str[el])
+            ret.append(str_set)
+        return ret
+
+    def to_int_encoding(self, str_subset):
+        int_encoding = 0
+        for label in self.str_leaves:
+            int_encoding += self.str_to_bit[label]
+        return int_encoding
 
     def add_resolution(self, res):
         sc = res.score
@@ -88,56 +162,19 @@ class ConnectedComponent(object):
             return True
         return False
 
-    def _get_one_label(self):
-        one_subset = next(iter(self.subset_wts.keys()))
-        return next(iter(one_subset))
-
-    def _count_trees(self):
-        num_trees = 0
-        one_label = self._get_one_label()
-        for subset, score in self.subset_wts.items():
-            if one_label in subset:
-                num_trees += score
-        return num_trees
-
-    def _force_maj_rule(self):
-        force_inc_subsets = set()
-        force_inc_leaves = set()
-        sum_sc = 0
-        FORCING_MAJ_RULE = False
-        if FORCING_MAJ_RULE:
-            num_trees = self._count_trees()
-            info(f"num_trees = {num_trees}")
-            # Force include any subsets in the majority
-            maj_cutoff = 1 + (num_trees // 2)
-            for subset, wt in self.subset_wts.items():
-                if wt >= maj_cutoff:
-                    force_inc_subsets.add(subset)
-                    assert force_inc_leaves.isdisjoint(subset)
-                    force_inc_leaves.update(subset)
-                    sum_sc += wt
-            info(
-                f"Maj-rule forcing: {len(force_inc_subsets)} subsest, {len(force_inc_leaves)} labels"
-            )
-        return list(force_inc_subsets), force_inc_leaves, sum_sc
-
-    def _choose_one_possible_label(self, in_leaves, possible):
-        assert len(possible) > 0
-        labels_left = self.leaves.difference(in_leaves)
-        USE_MOST_FREQ = False
-        if USE_MOST_FREQ:
-            most_freq_label, most_freq_count = None, 0
-            for label in labels_left:
-                reps = sum([1 for i in possible if label in i])
-                if reps > most_freq_count:
-                    most_freq_label, most_freq_count = label, reps
-            return most_freq_label
-        least_freq_label, least_freq_count = None, 1 + len(possible)
-        for label in labels_left:
-            reps = sum([1 for i in possible if label in i])
-            if reps < least_freq_count:
-                least_freq_label, least_freq_count = label, reps
-        return least_freq_label
+    def _create_str_to_bit_encoding(self):
+        self.b_leaves = 0
+        self.b_subset_wts = {}
+        self.str_to_bit = {}
+        self.b_to_str = {}
+        curr_place = 1
+        for label in self.str_leaves:
+            self.str_to_bit[label] = curr_place
+            self.b_to_str[curr_place] = label
+            self.b_leaves += curr_place
+            curr_place *= 2
+        for label_set, weight in self.str_subset_wts.items():
+            self.b_subset_wts[self.to_int_encoding(label_set)] = weight
 
     def fill_resolutions(self):
         if self.cache is None:
@@ -145,162 +182,94 @@ class ConnectedComponent(object):
             assert self.compat_cache is None
             self.compat_cache = {}
         self.resolutions = {}
-        all_subsets = list(self.subset_wts.keys())
+        if self.b_leaves is None:
+            self._create_str_to_bit_encoding()
+        else:
+            assert self.b_subset_wts is not None
+        all_subsets = list(self.b_subset_wts.keys())
         assert len(all_subsets) > 0
         one_subset = all_subsets[0]
         if len(all_subsets) == 1:
-            assert one_subset == self.leaves
-            res = CCResolution(
-                subsets=[one_subset], sum_score=self.subset_wts[one_subset]
-            )
+            assert one_subset == self.b_leaves
+            sum_sc = self.b_subset_wts[one_subset]
+            res = CCResolution(subsets=[one_subset], sum_score=sum_sc)
             self.add_resolution(res)
             return
-        forced, force_inc_leaves, sum_sc = self._force_maj_rule()
-        if force_inc_leaves == self.leaves:
-            res = CCResolution(subsets=forced, sum_score=sum_sc)
-            self.add_resolution(res)
-            return
-        possible = [i for i in all_subsets if force_inc_leaves.isdisjoint(i)]
+        # forced, force_inc_leaves, sum_sc = self._force_maj_rule()
+        # if force_inc_leaves == self.leaves:
+        #     res = CCResolution(subsets=forced, sum_score=sum_sc)
+        #     self.add_resolution(res)
+        #     return
+        # possible = [i for i in all_subsets if force_inc_leaves.isdisjoint(i)]
+        forced = []
+        force_inc_bits = 0
+        sum_sc = 0
+        possible = all_subsets  # alias due to trying out forcing maj-rule
         try:
-            self._rec_fill_res(forced, force_inc_leaves, possible, sum_sc)
+            self._rec_fill_res(forced, force_inc_bits, possible, sum_sc)
         except AssertionError:
             print(f"fill_resolutions_possible = {possible}")
             print(f"fill_resolutions_forced = {forced}")
             raise
 
-    def subsets_compat_with(self, el):
-        cs = self.compat_cache.get(el)
-        # cs = None
-        if cs is None:
-            cs = frozenset(
-                [o for o in self.top_cc.subset_wts.keys() if el.isdisjoint(o)]
-            )
-            self.compat_cache[el] = cs
-        return cs
-
-    def _rec_fill_res(self, in_sets, in_leaves, possible, sum_sc):
-        one_poss_label = self._choose_one_possible_label(in_leaves, possible)
+    def _rec_fill_res(self, in_subsets, in_labels, possible, sum_sc):
+        one_poss_label = self._choose_one_possible_label(in_labels, possible)
         alternatives, others = [], set()
         for subset in possible:
-            if one_poss_label in subset:
+            if one_poss_label & subset:
                 alternatives.append(subset)
             else:
                 others.add(subset)
 
         for idx, i in enumerate(alternatives):
-            po_list = others.intersection(self.subsets_compat_with(i))
+            leaves_held = in_labels
+            leaves_held |= i  # add label "i"
+            i_sc = self.b_subset_wts[i]
+            leaves_needed = self.b_leaves - leaves_held
+            if not leaves_needed:
+                ires = CCResolution(in_subsets + [i], i_sc + sum_sc)
+                self.add_resolution(ires)
+                continue
+            poss_other = others.intersection(self.subsets_compat_with(i))
             # info(
             #     f"{self.indent}idx={idx} of #alt={len(alternatives)} |leaves|={len(self.leaves)} #others={len(others)}, #po_list={len(po_list)}"
             # )
-            leaves_held = set(in_leaves)
-            leaves_held.update(i)
-            leaves_held = frozenset(leaves_held)
-            i_sc = self.subset_wts[i]
-            leaves_needed = frozenset(self.leaves.difference(leaves_held))
-            if not leaves_needed:
-                ires = CCResolution(in_sets + [i], i_sc + sum_sc)
-                self.add_resolution(ires)
+            if not poss_other:
                 continue
-            if not po_list:
-                continue
-            sub_cc = cc_for_subset(leaves_needed, po_list, self)
+            sub_cc = cc_for_subset(leaves_needed, poss_other, self)
             if sub_cc is None:
                 continue
             for num_subs, res in sub_cc.resolutions.items():
                 bigger_res = CCResolution(
-                    in_sets + [i] + res.subsets, i_sc + sum_sc + res.score
+                    in_subsets + [i] + res.subsets, i_sc + sum_sc + res.score
                 )
                 self.add_resolution(bigger_res)
 
-            # po_ls = set(i)
-            # assert po_ls.isdisjoint(in_leaves)
-            # needed
-            # complements_in_sets = False
-            # num_needed = len(self.leaves) - len(in_leaves)
-            # for o in po_list:
-            #     po_ls.update(o)
-            #     if len(po_ls) >= num_needed:
-            #         assert len(po_ls) == num_needed
-            #         complements_in_sets = True
-            #         break
-            # if not complements_in_sets:
-            #     continue
-            # try:
-            #     self._ind_rec_fill(
-            #         inc_leaves=set(in_leaves),
-            #         newest=i,
-            #         prev_subs=list(in_sets),
-            #         poss_others=po_list,
-            #         sum_sc=sum_sc,
-            #         prev_str=next_str,
-            #     )
-            # except AssertionError:
-            #     print("_rfr_in_sets =", in_sets)
-            #     print("_rfr_i =", i)
-            #     print("_rfr_others =", others)
-            #     print("_rfr_po_list =", po_list)
-            #     raise
+    def _choose_one_possible_label(self, in_leaves, possible):
+        assert len(possible) > 0
+        labels_left = self.b_leaves - in_leaves
+        USE_MOST_FREQ = False
+        if USE_MOST_FREQ:
+            most_freq_label, most_freq_count = None, 0
+            for label in int_to_bit_set(labels_left):
+                reps = sum([1 for i in possible if label & i])
+                if reps > most_freq_count:
+                    most_freq_label, most_freq_count = label, reps
+            return most_freq_label
+        least_freq_label, least_freq_count = None, 1 + len(possible)
+        for label in int_to_bit_set(labels_left):
+            reps = sum([1 for i in possible if label & i])
+            if reps < least_freq_count:
+                least_freq_label, least_freq_count = label, reps
+        return least_freq_label
 
-    def _ind_rec_fill(
-        self, inc_leaves, newest, prev_subs, poss_others, sum_sc, prev_str=""
-    ):
-        assert inc_leaves.isdisjoint(newest)
-        inc_leaves.update(newest)
-        sum_sc += self.subset_wts[newest]
-        prev_subs.append(newest)
-        if inc_leaves == self.leaves:
-            return self.add_resolution(CCResolution(prev_subs, sum_sc))
-        if not poss_others:
-            return False
-        # indent = "  " * (1 + len(prev_subs))
-        # info(
-        #     f"{indent} _irfr({len(self.leaves) - len(inc_leaves)} leaves more. {len(poss_others)} others"
-        # )
-        one_other = poss_others[0]
-        if len(poss_others) == 1:
-            inc_leaves.update(one_other)
-            if inc_leaves != self.leaves:
-                return False
-            prev_subs.append(one_other)
-            sum_sc += self.subset_wts[one_other]
-            return self.add_resolution(CCResolution(prev_subs, sum_sc))
-        try:
-            return self._rec_fill_res(
-                prev_subs, inc_leaves, poss_others, sum_sc, prev_str=prev_str
-            )
-        except AssertionError:
-            print("_irfr_prev_subs =", prev_subs)
-            print("_irfr_poss_others =", poss_others)
-            raise
-
-        # others = [i for i in poss_others if inc_leaves.isdisjoint(i)]
-        # ret = False
-        # while others:
-        #     next_new = others.pop(0)
-        #     nr = self._continue_resolution(inc_leaves=set(inc_leaves),
-        #                               newest=next_new,
-        #                               prev_subs=list(prev_subs),
-        #                               poss_others=others,
-        #                               sum_sc=sum_sc)
-        #     ret = ret or nr
-        # return ret
-
-    def write(self, out):
-        if not self.resolutions:
-            self.fill_resolutions()
-        out.write(f"{len(self.leaves)} labels, {len(self.subset_wts)} subsets.\n")
-        for x in range(self.min_num_subs, 1 + self.max_num_subs):
-            res = self.resolutions.get(x)
-            if res is not None:
-                out.write(f"  {x} subsets, best score={res.score}: {res.subsets}\n")
-            else:
-                out.write(f"  {x} subsets: no resolution\n")
-
-    def __hash__(self):
-        return id(self)
-
-    def __eq__(self, other):
-        return self.leaves == other.leaves and self.subset_wts == other.subset_wts
+    def subsets_compat_with(self, el):
+        cs = self.compat_cache.get(el)
+        # cs = None
+        if cs is None:
+            cs = frozenset([o for o in self.top_cc.b_subset_wts.keys() if not el & o])
+            self.compat_cache[el] = cs
+        return cs
 
 
 class LabelGraph(object):
