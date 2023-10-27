@@ -18,6 +18,7 @@ class CCResolution(object):
 
 
 def cc_for_subset(leaves, possible_sets, par_cc):
+    assert possible_sets
     assert par_cc is not None
     psl = set()
     for po in possible_sets:
@@ -29,12 +30,13 @@ def cc_for_subset(leaves, possible_sets, par_cc):
     cache = par_cc.cache
     cache_hit = cache.get(leaves)
     if cache_hit is not None:
-        info(f"Cache hit for {len(leaves)} leaves and {len(possible_sets)} sets!")
+        # info(f"Cache hit for {len(leaves)} leaves and {len(possible_sets)} sets!")
         return cache_hit
     nsw = {}
     for ps in possible_sets:
         nsw[ps] = par_cc.subset_wts[ps]
-    sub_cc = ConnectedComponent(leaves=leaves, subset_wts=nsw, cache=cache)
+    cc_cc = par_cc.compat_cache
+    sub_cc = ConnectedComponent(leaves=leaves, subset_wts=nsw, top_cc=par_cc.top_cc)
     sub_cc.indent = "  " + par_cc.indent
     sub_cc.fill_resolutions()
     cache[leaves] = sub_cc
@@ -43,14 +45,21 @@ def cc_for_subset(leaves, possible_sets, par_cc):
 
 class ConnectedComponent(object):
     def __init__(
-        self, label_set=None, freq=None, leaves=None, subset_wts=None, cache=None
+        self, label_set=None, freq=None, leaves=None, subset_wts=None, top_cc=None
     ):
         self.leaves = set()
         self.resolutions = {}
         self.min_num_subs = None
         self.max_num_subs = None
-        self.cache = cache
         self.indent = ""
+        if top_cc is None:
+            self.top_cc = self
+            self.cache = {}
+            self.compat_cache = {}
+        else:
+            self.top_cc = top_cc
+            self.cache = top_cc.cache
+            self.compat_cache = top_cc.compat_cache
 
         if label_set is None:
             assert leaves is not None
@@ -133,6 +142,8 @@ class ConnectedComponent(object):
     def fill_resolutions(self):
         if self.cache is None:
             self.cache = {}
+            assert self.compat_cache is None
+            self.compat_cache = {}
         self.resolutions = {}
         all_subsets = list(self.subset_wts.keys())
         assert len(all_subsets) > 0
@@ -157,25 +168,44 @@ class ConnectedComponent(object):
             print(f"fill_resolutions_forced = {forced}")
             raise
 
+    def subsets_compat_with(self, el):
+        cs = self.compat_cache.get(el)
+        # cs = None
+        if cs is None:
+            cs = frozenset(
+                [o for o in self.top_cc.subset_wts.keys() if el.isdisjoint(o)]
+            )
+            self.compat_cache[el] = cs
+        return cs
+
     def _rec_fill_res(self, in_sets, in_leaves, possible, sum_sc):
         one_poss_label = self._choose_one_possible_label(in_leaves, possible)
-        alternatives, others = [], []
+        alternatives, others = [], set()
         for subset in possible:
-            dest = alternatives if one_poss_label in subset else others
-            dest.append(subset)
+            if one_poss_label in subset:
+                alternatives.append(subset)
+            else:
+                others.add(subset)
+
         for idx, i in enumerate(alternatives):
-            po_list = [o for o in others if i.isdisjoint(o)]
-            info(
-                f"{self.indent}idx={idx} of #alt={len(alternatives)} |leaves|={len(self.leaves)} #others={len(others)}, #po_list={len(po_list)}"
-            )
+            po_list = others.intersection(self.subsets_compat_with(i))
+            # info(
+            #     f"{self.indent}idx={idx} of #alt={len(alternatives)} |leaves|={len(self.leaves)} #others={len(others)}, #po_list={len(po_list)}"
+            # )
             leaves_held = set(in_leaves)
             leaves_held.update(i)
             leaves_held = frozenset(leaves_held)
+            i_sc = self.subset_wts[i]
             leaves_needed = frozenset(self.leaves.difference(leaves_held))
+            if not leaves_needed:
+                ires = CCResolution(in_sets + [i], i_sc + sum_sc)
+                self.add_resolution(ires)
+                continue
+            if not po_list:
+                continue
             sub_cc = cc_for_subset(leaves_needed, po_list, self)
             if sub_cc is None:
                 continue
-            i_sc = self.subset_wts[i]
             for num_subs, res in sub_cc.resolutions.items():
                 bigger_res = CCResolution(
                     in_sets + [i] + res.subsets, i_sc + sum_sc + res.score
