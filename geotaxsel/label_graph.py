@@ -250,6 +250,8 @@ class ConnectedComponent(object):
                 others.add(subset)
 
         for idx, i in enumerate(alternatives):
+            # if self.top_cc is self:
+            #     self.cache.clear()
             po_list = others.intersection(self.subsets_compat_with(i))
             # info(
             #     f"{self.indent}idx={idx} of #alt={len(alternatives)} |leaves|={len(self.leaves)} #others={len(others)}, #po_list={len(po_list)}"
@@ -348,6 +350,11 @@ class ConnectedComponent(object):
         # return ret
 
     def write(self, out):
+        # out.write(f"{len(self.subset_wts)}\n")
+        # for subset, weight in self.subset_wts.items():
+        #     x = ",".join(subset)
+        #     out.write(f"{weight},{x}\n")
+        # return
         if not self.resolutions:
             self.fill_resolutions()
         out.write(f"{len(self.leaves)} labels, {len(self.subset_wts)} subsets.\n")
