@@ -195,7 +195,7 @@ class ConnectedComponent(object):
         if not self.simplified:
             scc, trans_obj = simplify_and_solve(self)
             scc.fill_resolutions()
-            scc.write(sys.stdout)
+            # scc.write(sys.stdout)
             self.resolutions = scc.resolutions
             for res in self.resolutions.values():
                 res.subsets = [expand_subset_trans(i, trans_obj) for i in res.subsets]
