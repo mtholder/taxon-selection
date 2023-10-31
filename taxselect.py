@@ -11,6 +11,7 @@ from geotaxsel import (
     parse_geo,
     prune_taxa_without_sp_data,
     ultrametric_greedy_mmd,
+    serialize_problems_for_most_common_choice,
     choose_most_common,
 )
 import dendropy
@@ -22,6 +23,44 @@ def record_clade_sel(sel, rep_selections):
         labels_below = frozenset([i.taxon.label for i in leaves_below])
         pn = rep_selections.get(labels_below, 0)
         rep_selections[labels_below] = 1 + pn
+
+
+def create_most_common_groups_probs(
+    geo_ret,
+    centroid_fp=None,
+    name_mapping_fp=None,
+    num_to_select=1,
+    use_ultrametricity=True,
+    tree_dir=None,
+    ultrametric_tol=5e-5,
+):
+    sp_by_name, clades, upham_to_iucn, new_names_for_leaves = geo_ret
+    file_names = os.listdir(tree_dir)
+    file_names.sort()
+    sp_pat = re.compile(r"^([A-Z][a-z]+ +[-a-z0-9]+)$")
+    rep_selections = {}
+    for tree_n, el in enumerate(file_names):
+        tree_fp = os.path.join(tree_dir, el)
+        tree = dendropy.Tree.get(path=tree_fp, schema="newick")
+        print(tree_fp)
+        prune_taxa_without_sp_data(
+            tree,
+            frozenset(sp_by_name.keys()),
+            upham_to_iucn=upham_to_iucn,
+            name_mapping_fp=name_mapping_fp,
+            centroid_fp=centroid_fp,
+            clades=clades,
+            new_names_for_leaves=new_names_for_leaves,
+            sp_pat_in_tree=sp_pat,
+        )
+        if use_ultrametricity:
+            sel = ultrametric_greedy_mmd(
+                tree, num_to_select, sp_by_name, ultrametric_tol=ultrametric_tol
+            )
+        else:
+            sel = greedy_mmd(tree, num_to_select, sp_by_name)
+        record_clade_sel(sel, rep_selections)
+    return rep_selections
 
 
 def run_tree_dir(
@@ -43,34 +82,19 @@ def run_tree_dir(
         clade_defs_fp=clade_defs_fp,
         name_updating_fp=name_updating_fp,
     )
-    sp_by_name, clades, upham_to_iucn, new_names_for_leaves = geo_ret
-    file_names = os.listdir(tree_dir)
-    file_names.sort()
-    sp_pat = re.compile("^([A-Z][a-z]+ +[-a-z0-9]+)$")
-    rep_selections = {}
-    for tree_n, el in enumerate(file_names):
-        if tree_n > 999:
-            break
-        tree_fp = os.path.join(tree_dir, el)
-        tree = dendropy.Tree.get(path=tree_fp, schema="newick")
-        print(tree_fp)
-        prune_taxa_without_sp_data(
-            tree,
-            frozenset(sp_by_name.keys()),
-            upham_to_iucn=upham_to_iucn,
-            name_mapping_fp=name_mapping_fp,
+    need_most_common_prob = True
+    if need_most_common_prob:
+        rep_selections = create_most_common_groups_probs(
+            geo_ret,
             centroid_fp=centroid_fp,
-            clades=clades,
-            new_names_for_leaves=new_names_for_leaves,
-            sp_pat_in_tree=sp_pat,
+            name_mapping_fp=name_mapping_fp,
+            use_ultrametricity=use_ultrametricity,
+            tree_dir=tree_dir,
+            ultrametric_tol=ultrametric_tol,
         )
-        if use_ultrametricity:
-            sel = ultrametric_greedy_mmd(
-                tree, num_to_select, sp_by_name, ultrametric_tol=ultrametric_tol
-            )
-        else:
-            sel = greedy_mmd(tree, num_to_select, sp_by_name)
-        record_clade_sel(sel, rep_selections)
+    td = serialize_problems_for_most_common_choice(rep_selections)
+    sys.stderr.write(f'Temporary directory of scratch files created at:\n"{td}"\n')
+    sys.exit("Early exit")
     final = choose_most_common(rep_selections, num_to_select, num_trees=1 + tree_n)
     output_chosen_anc(
         tree=None,

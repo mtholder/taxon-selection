@@ -1,6 +1,6 @@
 #! /usr/bin/env python3
-import re
 import itertools
+
 from .logs import info
 from .taxonomy import Ranks
 
@@ -19,7 +19,7 @@ def find_tree_leaves_not_in_clades(clades, tree):
     clade_tips = tips_from_clades(clades)
     to_del = []
     for leaf in tree.leaf_nodes():
-        if not leaf.taxon.label in clade_tips:
+        if leaf.taxon.label not in clade_tips:
             print(leaf.taxon.label)
             to_del.append(leaf)
     return to_del

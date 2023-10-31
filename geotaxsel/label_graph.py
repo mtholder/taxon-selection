@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 import sys
+from tempfile import mkdtemp
+import os
 from .logs import info
 
 
@@ -305,49 +307,50 @@ class ConnectedComponent(object):
             #     print("_rfr_po_list =", po_list)
             #     raise
 
-    def _ind_rec_fill(
-        self, inc_leaves, newest, prev_subs, poss_others, sum_sc, prev_str=""
-    ):
-        assert inc_leaves.isdisjoint(newest)
-        inc_leaves.update(newest)
-        sum_sc += self.subset_wts[newest]
-        prev_subs.append(newest)
-        if inc_leaves == self.leaves:
-            return self.add_resolution(CCResolution(prev_subs, sum_sc))
-        if not poss_others:
-            return False
-        # indent = "  " * (1 + len(prev_subs))
-        # info(
-        #     f"{indent} _irfr({len(self.leaves) - len(inc_leaves)} leaves more. {len(poss_others)} others"
-        # )
-        one_other = poss_others[0]
-        if len(poss_others) == 1:
-            inc_leaves.update(one_other)
-            if inc_leaves != self.leaves:
-                return False
-            prev_subs.append(one_other)
-            sum_sc += self.subset_wts[one_other]
-            return self.add_resolution(CCResolution(prev_subs, sum_sc))
-        try:
-            return self._rec_fill_res(
-                prev_subs, inc_leaves, poss_others, sum_sc, prev_str=prev_str
-            )
-        except AssertionError:
-            print("_irfr_prev_subs =", prev_subs)
-            print("_irfr_poss_others =", poss_others)
-            raise
+    #
+    # def _ind_rec_fill(
+    #     self, inc_leaves, newest, prev_subs, poss_others, sum_sc, prev_str=""
+    # ):
+    #     assert inc_leaves.isdisjoint(newest)
+    #     inc_leaves.update(newest)
+    #     sum_sc += self.subset_wts[newest]
+    #     prev_subs.append(newest)
+    #     if inc_leaves == self.leaves:
+    #         return self.add_resolution(CCResolution(prev_subs, sum_sc))
+    #     if not poss_others:
+    #         return False
+    #     # indent = "  " * (1 + len(prev_subs))
+    #     # info(
+    #     #     f"{indent} _irfr({len(self.leaves) - len(inc_leaves)} leaves more. {len(poss_others)} others"
+    #     # )
+    #     one_other = poss_others[0]
+    #     if len(poss_others) == 1:
+    #         inc_leaves.update(one_other)
+    #         if inc_leaves != self.leaves:
+    #             return False
+    #         prev_subs.append(one_other)
+    #         sum_sc += self.subset_wts[one_other]
+    #         return self.add_resolution(CCResolution(prev_subs, sum_sc))
+    #     try:
+    #         return self._rec_fill_res(
+    #             prev_subs, inc_leaves, poss_others, sum_sc, prev_str=prev_str
+    #         )
+    #     except AssertionError:
+    #         print("_irfr_prev_subs =", prev_subs)
+    #         print("_irfr_poss_others =", poss_others)
+    #         raise
 
-        # others = [i for i in poss_others if inc_leaves.isdisjoint(i)]
-        # ret = False
-        # while others:
-        #     next_new = others.pop(0)
-        #     nr = self._continue_resolution(inc_leaves=set(inc_leaves),
-        #                               newest=next_new,
-        #                               prev_subs=list(prev_subs),
-        #                               poss_others=others,
-        #                               sum_sc=sum_sc)
-        #     ret = ret or nr
-        # return ret
+    # others = [i for i in poss_others if inc_leaves.isdisjoint(i)]
+    # ret = False
+    # while others:
+    #     next_new = others.pop(0)
+    #     nr = self._continue_resolution(inc_leaves=set(inc_leaves),
+    #                               newest=next_new,
+    #                               prev_subs=list(prev_subs),
+    #                               poss_others=others,
+    #                               sum_sc=sum_sc)
+    #     ret = ret or nr
+    # return ret
 
     def write(self, out):
         # out.write(f"{len(self.subset_wts)}\n")
@@ -416,8 +419,9 @@ class LabelGraph(object):
         return sortable
 
     def write(self, out):
+        sortable = self._get_sortable_comp_info()
         out.write(f"{len(sortable)} components:\n")
-        for ind, el in enumerate(self._get_sortable_comp_info()):
+        for ind, el in enumerate(sortable):
             out.write(f"Component #{1 + ind}: ")
             el[-1].write(out)
 
@@ -440,8 +444,11 @@ cc_{1+ind}.write(sys.stdout)
                 )
 
 
-def choose_most_common(rep_selections, num_to_select, num_trees):
-    with open("cruft/TEMP_REP_SELS.python", "w") as outp:
+def serialize_problems_for_most_common_choice(rep_selections, temp_dir=None):
+    if temp_dir is None:
+        temp_dir = mkdtemp(prefix="taxsel-scratch-", dir=os.curdir)
+
+    with open(os.path.join(temp_dir, "TEMP_REP_SELS.py"), "w") as outp:
         outp.write("x = ")
         outp.write(repr(rep_selections))
         outp.write("\n")
@@ -449,9 +456,24 @@ def choose_most_common(rep_selections, num_to_select, num_trees):
 
     for k, v in rep_selections.items():
         lg.add_set(k, v)
-    lg.write_components("cruft/comp")
-    sys.exit("early in choose_most_common\n")
-    lg.write(sys.stdout)
+    pref = os.path.join(temp_dir, "comp")
+    lg.write_components(pref)
+    return temp_dir
+
+
+def choose_most_common(rep_selections):
+    raise NotImplementedError("Not implemented yet")
+    # with open("cruft/TEMP_REP_SELS.python", "w") as outp:
+    #     outp.write("x = ")
+    #     outp.write(repr(rep_selections))
+    #     outp.write("\n")
+    # lg = LabelGraph()
+    #
+    # for k, v in rep_selections.items():
+    #     lg.add_set(k, v)
+    # lg.write_components("cruft/comp")
+    # sys.exit("early in choose_most_common\n")
+    # lg.write(sys.stdout)
 
     # crs = dict(rep_selections)
     # by_freq.sort(reverse=True)
