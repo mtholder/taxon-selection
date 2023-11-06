@@ -88,6 +88,7 @@ def run_tree_dir(
             geo_ret,
             centroid_fp=centroid_fp,
             name_mapping_fp=name_mapping_fp,
+            num_to_select=num_to_select,
             use_ultrametricity=use_ultrametricity,
             tree_dir=tree_dir,
             ultrametric_tol=ultrametric_tol,
