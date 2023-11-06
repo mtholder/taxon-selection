@@ -17,6 +17,36 @@ from geotaxsel import (
 import dendropy
 
 
+class RunSettings(object):
+    def __init__(
+        self,
+        country_name_fp=None,
+        centroid_fp=None,
+        tree_fp=None,
+        name_mapping_fp=None,
+        num_to_select=2,
+        use_ultrametricity=True,
+        clade_defs_fp=None,
+        name_updating_fp=None,
+        cut_branches_fp=None,
+        tree_dir=None,
+        ultrametric_tol=5e-5,
+        scratch_dir=None,
+    ):
+        self.country_name_fp = country_name_fp
+        self.centroid_fp = centroid_fp
+        self.tree_fp = tree_fp
+        self.name_mapping_fp = name_mapping_fp
+        self.num_to_select = num_to_select
+        self.use_ultrametricity = use_ultrametricity
+        self.clade_defs_fp = clade_defs_fp
+        self.name_updating_fp = name_updating_fp
+        self.cut_branches_fp = cut_branches_fp
+        self.tree_dir = tree_dir
+        self.ultrametric_tol = ultrametric_tol
+        self.scratch_dir = scratch_dir
+
+
 def record_clade_sel(sel, rep_selections):
     for anc in sel:
         leaves_below = list(anc.leaf_nodes())
@@ -63,39 +93,35 @@ def create_most_common_groups_probs(
     return rep_selections
 
 
-def run_tree_dir(
-    country_name_fp,
-    centroid_fp,
-    name_mapping_fp,
-    num_to_select,
-    use_ultrametricity=True,
-    clade_defs_fp=None,
-    name_updating_fp=None,
-    cut_branches_fp=None,
-    tree_dir=None,
-    ultrametric_tol=5e-5,
-):
+def run_tree_dir(settings):
     geo_ret = parse_geo(
-        country_name_fp=country_name_fp,
-        centroid_fp=centroid_fp,
-        name_mapping_fp=name_mapping_fp,
-        clade_defs_fp=clade_defs_fp,
-        name_updating_fp=name_updating_fp,
+        country_name_fp=settings.country_name_fp,
+        centroid_fp=settings.centroid_fp,
+        name_mapping_fp=settings.name_mapping_fp,
+        clade_defs_fp=settings.clade_defs_fp,
+        name_updating_fp=settings.name_updating_fp,
     )
-    need_most_common_prob = True
+    if settings.scratch_dir is not None:
+        one_comp_py_fp = os.path.join(settings.scratch_dir, "comp-1.py")
+        need_most_common_prob = not os.path.isfile(one_comp_py_fp)
+    else:
+        need_most_common_prob = True
     if need_most_common_prob:
         rep_selections = create_most_common_groups_probs(
             geo_ret,
-            centroid_fp=centroid_fp,
-            name_mapping_fp=name_mapping_fp,
-            num_to_select=num_to_select,
-            use_ultrametricity=use_ultrametricity,
-            tree_dir=tree_dir,
-            ultrametric_tol=ultrametric_tol,
+            centroid_fp=settings.centroid_fp,
+            name_mapping_fp=settings.name_mapping_fp,
+            num_to_select=settings.num_to_select,
+            use_ultrametricity=settings.use_ultrametricity,
+            tree_dir=settings.tree_dir,
+            ultrametric_tol=settings.ultrametric_tol,
         )
-    td = serialize_problems_for_most_common_choice(rep_selections)
-    sys.stderr.write(f'Temporary directory of scratch files created at:\n"{td}"\n')
-    sys.exit("Early exit")
+        td = serialize_problems_for_most_common_choice(rep_selections)
+        sys.stderr.write(f'Temporary directory of scratch files created at:\n"{td}"\n')
+        sys.exit("Early exit")
+    else:
+        td = settings.scratch_dir
+    sys.exit(f"Scratch dir is {td}\n")
     final = choose_most_common(rep_selections, num_to_select, num_trees=1 + tree_n)
     output_chosen_anc(
         tree=None,
@@ -106,53 +132,33 @@ def run_tree_dir(
     return
 
 
-def run(
-    country_name_fp,
-    centroid_fp,
-    name_mapping_fp,
-    num_to_select,
-    tree_fp=None,
-    use_ultrametricity=True,
-    clade_defs_fp=None,
-    name_updating_fp=None,
-    cut_branches_fp=None,
-    tree_dir=None,
-    ultrametric_tol=5e-5,
-):
-    if tree_dir is not None:
-        return run_tree_dir(
-            country_name_fp=country_name_fp,
-            centroid_fp=centroid_fp,
-            name_mapping_fp=name_mapping_fp,
-            num_to_select=num_to_select,
-            use_ultrametricity=use_ultrametricity,
-            clade_defs_fp=clade_defs_fp,
-            name_updating_fp=name_updating_fp,
-            cut_branches_fp=cut_branches_fp,
-            tree_dir=tree_dir,
-            ultrametric_tol=ultrametric_tol,
-        )
+def run(settings):
+    if settings.tree_dir is not None:
+        return run_tree_dir(settings)
     sp_pat = re.compile("^([A-Z][a-z]+ +[-a-z0-9]+) [A-Z][A-Za-z]+ [A-Z]+$")
     assert tree_fp is not None
     tree, sp_by_name = parse_geo_and_tree(
-        country_name_fp,
-        centroid_fp,
-        name_mapping_fp,
-        tree_fp,
-        clade_defs_fp=clade_defs_fp,
-        name_updating_fp=name_updating_fp,
-        sp_pat_in_tree=sp_pat,
+        settings.country_name_fp,
+        settings.centroid_fp,
+        settings.name_mapping_fp,
+        settings.tree_fp,
+        clade_defs_fp=settings.clade_defs_fp,
+        name_updating_fp=settings.name_updating_fp,
+        sp_pat_in_tree=settings.sp_pat,
     )
-    if use_ultrametricity:
+    if settings.use_ultrametricity:
         sel = ultrametric_greedy_mmd(
-            tree, num_to_select, sp_by_name, ultrametric_tol=ultrametric_tol
+            tree,
+            settings.num_to_select,
+            sp_by_name,
+            ultrametric_tol=settings.ultrametric_tol,
         )
     else:
-        sel = greedy_mmd(tree, num_to_select, sp_by_name)
-    output_chosen_anc(tree, cut_branches_fp, sel)
+        sel = greedy_mmd(tree, settings.num_to_select, sp_by_name)
+    output_chosen_anc(tree, settings.cut_branches_fp, sel)
     sys.exit("early exit\n")
     print("Selected:\n  {}\n".format("\n  ".join(sel)))
-    return
+    return 0
 
 
 def main():
@@ -233,6 +239,12 @@ def main():
         type=float,
         help="precision for checking that the trees are ultrametric. Set this higher if you think that rounding error is causing your trees to be rejected as non-ultrametric",
     )
+    parser.add_argument(
+        "--scratch-dir",
+        default=None,
+        required=False,
+        help="Directory from a previous run that was aborted.",
+    )
     args = parser.parse_args(sys.argv[1:])
     if args.name_mapping_file is None:
         if args.country_file is not None:
@@ -246,7 +258,7 @@ def main():
         sys.exit("Only 1 of --tree-file or --tree-dir can be supplied.\n")
     if args.ultrametricity_tol < 0.0:
         sys.exit("--ultrametricity-tol cannot be negative")
-    run(
+    rs = RunSettings(
         country_name_fp=args.country_file,
         centroid_fp=args.centroid_file,
         tree_fp=args.tree_file,
@@ -258,8 +270,11 @@ def main():
         cut_branches_fp=args.cut_branches_file,
         tree_dir=args.tree_dir,
         ultrametric_tol=args.ultrametricity_tol,
+        scratch_dir=args.scratch_dir,
     )
+    return run(rs)
 
 
 if __name__ == "__main__":
-    main()
+    rc = main()
+    sys.exit(rc)
