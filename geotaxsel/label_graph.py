@@ -426,6 +426,14 @@ class LabelGraph(object):
             el[-1].write(out)
 
     def write_components(self, fprefix):
+        files_created = []
+        for ind, el in enumerate(self._get_sortable_comp_info()):
+            fp = f"{fprefix}-{1+ind}.csv"
+            files_created.append(fp)
+            _serialize_component(fp, el[-1])
+        return files_created
+
+    def write_components_writer(self, fprefix):
         for ind, el in enumerate(self._get_sortable_comp_info()):
             fp = f"{fprefix}-{1+ind}.py"
             comp = el[-1]
@@ -444,6 +452,17 @@ cc_{1+ind}.write(sys.stdout)
                 )
 
 
+def _serialize_component(fp, comp):
+    """Writes 1 component as csv as expected by max-weight-partition"""
+    with open(fp, "w") as outp:
+        outp.write(f"{len(comp.subset_wts)}\n")
+        for tax_set, wt in comp.subset_wts.items():
+            sl = list(tax_set)
+            sl.sort()
+            strf = ",".join(sl)
+            outp.write(f"{wt},{strf}\n")
+
+
 def serialize_problems_for_most_common_choice(rep_selections, temp_dir=None):
     if temp_dir is None:
         temp_dir = mkdtemp(prefix="taxsel-scratch-", dir=os.curdir)
@@ -453,11 +472,16 @@ def serialize_problems_for_most_common_choice(rep_selections, temp_dir=None):
         outp.write(repr(rep_selections))
         outp.write("\n")
     lg = LabelGraph()
-
     for k, v in rep_selections.items():
         lg.add_set(k, v)
     pref = os.path.join(temp_dir, "comp")
-    lg.write_components(pref)
+    written = lg.write_components(pref)
+    with open(os.path.join(temp_dir, ".problems.csv"), "w") as flagf:
+        for line in written:
+            flagf.write(f"{line}\n")
+    os.rename(
+        os.path.join(temp_dir, ".problems.csv"), os.path.join(temp_dir, "problems.csv")
+    )
     return temp_dir
 
 

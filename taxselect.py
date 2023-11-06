@@ -102,7 +102,9 @@ def run_tree_dir(settings):
         name_updating_fp=settings.name_updating_fp,
     )
     if settings.scratch_dir is not None:
-        one_comp_py_fp = os.path.join(settings.scratch_dir, "comp-1.py")
+        if not os.path.isdir(settings.scratch_dir):
+            raise RuntimeError(f"scratch_dir '{settings.scratch_dir}' does not exist.")
+        one_comp_py_fp = os.path.join(settings.scratch_dir, "problems.csv")
         need_most_common_prob = not os.path.isfile(one_comp_py_fp)
     else:
         need_most_common_prob = True
@@ -129,7 +131,9 @@ def run_tree_dir(settings):
         chosen_ancs=final,
         label_sets_to_freq=rep_selections,
     )
-    return
+    sys.exit("early exit\n")
+    print("Selected:\n  {}\n".format("\n  ".join(final)))
+    return 0
 
 
 def run(settings):
