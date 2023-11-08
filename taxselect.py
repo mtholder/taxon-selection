@@ -33,6 +33,7 @@ class RunSettings(object):
         tree_dir=None,
         ultrametric_tol=5e-5,
         scratch_dir=None,
+        max_solver_seconds=6000,
     ):
         self.country_name_fp = country_name_fp
         self.centroid_fp = centroid_fp
@@ -46,6 +47,7 @@ class RunSettings(object):
         self.tree_dir = tree_dir
         self.ultrametric_tol = ultrametric_tol
         self.scratch_dir = scratch_dir
+        self.max_solver_seconds = max_solver_seconds
 
 
 def record_clade_sel(sel, rep_selections):
@@ -124,7 +126,11 @@ def run_tree_dir(settings):
         sys.exit("Early exit")
     else:
         td = settings.scratch_dir
-    final = choose_most_common(num_to_select=settings.num_to_select, scratch_dir=td)
+    final = choose_most_common(
+        num_to_select=settings.num_to_select,
+        scratch_dir=td,
+        max_secs_per_run=settings.max_solver_seconds,
+    )
     sys.exit(f"Scratch dir is {td}\n")
     output_chosen_anc(
         tree=None,
@@ -245,6 +251,12 @@ def main():
         help="precision for checking that the trees are ultrametric. Set this higher if you think that rounding error is causing your trees to be rejected as non-ultrametric",
     )
     parser.add_argument(
+        "--max-solver-seconds",
+        default=6000,
+        type=float,
+        help="Number of seconds that the solver is allowed to work on a single problem of maximizing the groupings over different trees (tree-dir mode only)",
+    )
+    parser.add_argument(
         "--scratch-dir",
         default=None,
         required=False,
@@ -276,6 +288,7 @@ def main():
         tree_dir=args.tree_dir,
         ultrametric_tol=args.ultrametricity_tol,
         scratch_dir=args.scratch_dir,
+        max_solver_seconds=args.max_solver_seconds,
     )
     return run(rs)
 

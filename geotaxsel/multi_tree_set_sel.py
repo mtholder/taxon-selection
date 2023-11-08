@@ -35,8 +35,10 @@ def _run_solver(inp_fp, out_fp, max_secs_per_run, num_greedy=0):
     hide_out = out_fp + ".HIDE"
     err_fp = out_fp + "-err.txt"
     invoc = ["max-weight-partition", inp_fp]
+    if num_greedy > 0:
+        invoc.append(str(num_greedy))
     done = False
-    info(f"  Running: max-weight-partition {inp_fp}")
+    info(f"  Running: {' '.join(invoc)}")
     with open(err_fp, "w") as err_fo:
         with open(hide_out, "w") as out_fo:
             proc = subprocess.Popen(invoc, stdout=out_fo, stderr=err_fo)
@@ -52,7 +54,7 @@ def _run_solver(inp_fp, out_fp, max_secs_per_run, num_greedy=0):
         os.rename(hide_out, out_fp)
     else:
         info(
-            f"Solver did not complete on {inp_fp} within {max_secs_per_run}, trying witn num_greedy steps set to {1 + num_greedy}"
+            f"Solver did not complete on {inp_fp} within {max_secs_per_run}, trying with num_greedy steps set to {1 + num_greedy}"
         )
         _run_solver(inp_fp, out_fp, max_secs_per_run, num_greedy=1 + num_greedy)
 
