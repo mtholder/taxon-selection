@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 import sys
-from tempfile import mkdtemp
 import os
 from .logs import info
 
@@ -461,59 +460,3 @@ def _serialize_component(fp, comp):
             sl.sort()
             strf = ",".join(sl)
             outp.write(f"{wt},{strf}\n")
-
-
-def serialize_problems_for_most_common_choice(rep_selections, temp_dir=None):
-    if temp_dir is None:
-        temp_dir = mkdtemp(prefix="taxsel-scratch-", dir=os.curdir)
-
-    with open(os.path.join(temp_dir, "TEMP_REP_SELS.py"), "w") as outp:
-        outp.write("x = ")
-        outp.write(repr(rep_selections))
-        outp.write("\n")
-    lg = LabelGraph()
-    for k, v in rep_selections.items():
-        lg.add_set(k, v)
-    pref = os.path.join(temp_dir, "comp")
-    written = lg.write_components(pref)
-    with open(os.path.join(temp_dir, ".problems.csv"), "w") as flagf:
-        for line in written:
-            flagf.write(f"{line}\n")
-    os.rename(
-        os.path.join(temp_dir, ".problems.csv"), os.path.join(temp_dir, "problems.csv")
-    )
-    return temp_dir
-
-
-def choose_most_common(rep_selections):
-    raise NotImplementedError("Not implemented yet")
-    # with open("cruft/TEMP_REP_SELS.python", "w") as outp:
-    #     outp.write("x = ")
-    #     outp.write(repr(rep_selections))
-    #     outp.write("\n")
-    # lg = LabelGraph()
-    #
-    # for k, v in rep_selections.items():
-    #     lg.add_set(k, v)
-    # lg.write_components("cruft/comp")
-    # sys.exit("early in choose_most_common\n")
-    # lg.write(sys.stdout)
-
-    # crs = dict(rep_selections)
-    # by_freq.sort(reverse=True)
-    # sel_set = set()
-    # sel_leaf_set = set()
-    # for times_sel, label_set in by_freq:
-    #     if not label_set.isdisjoint(sel_leaf_set):
-    #         info(f"  skipping label_set seen {times_sel} times: {label_set}")
-    #         continue
-    #     sel_set.add(label_set)
-    #     sel_leaf_set.update(label_set)
-    #     if len(sel_set) == num_to_select:
-    #         if sel_leaf_set == full_label_set:
-    #             return sel_set
-    #         missing = full_label_set.difference(sel_leaf_set)
-    #         sys.exit(f"Got to {len(sel_set)} while missing {missing}\n")
-    #     if sel_leaf_set == full_label_set:
-    #         sys.exit(f"Covered all leaves in only {len(sel_set)} sets\n")
-    # assert False

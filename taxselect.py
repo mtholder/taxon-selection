@@ -13,6 +13,7 @@ from geotaxsel import (
     ultrametric_greedy_mmd,
     serialize_problems_for_most_common_choice,
     choose_most_common,
+    PROB_FN,
 )
 import dendropy
 
@@ -104,7 +105,7 @@ def run_tree_dir(settings):
     if settings.scratch_dir is not None:
         if not os.path.isdir(settings.scratch_dir):
             raise RuntimeError(f"scratch_dir '{settings.scratch_dir}' does not exist.")
-        one_comp_py_fp = os.path.join(settings.scratch_dir, "problems.csv")
+        one_comp_py_fp = os.path.join(settings.scratch_dir, PROB_FN)
         need_most_common_prob = not os.path.isfile(one_comp_py_fp)
     else:
         need_most_common_prob = True
@@ -123,8 +124,8 @@ def run_tree_dir(settings):
         sys.exit("Early exit")
     else:
         td = settings.scratch_dir
+    final = choose_most_common(num_to_select=settings.num_to_select, scratch_dir=td)
     sys.exit(f"Scratch dir is {td}\n")
-    final = choose_most_common(rep_selections, num_to_select, num_trees=1 + tree_n)
     output_chosen_anc(
         tree=None,
         cut_branches_fp=cut_branches_fp,
