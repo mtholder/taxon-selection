@@ -122,21 +122,17 @@ def run_tree_dir(settings):
             ultrametric_tol=settings.ultrametric_tol,
         )
         td = serialize_problems_for_most_common_choice(rep_selections)
-        sys.stderr.write(f'Temporary directory of scratch files created at:\n"{td}"\n')
-        sys.exit("Early exit")
     else:
         td = settings.scratch_dir
-    final = choose_most_common(
+    final_sc, final_subsets = choose_most_common(
         num_to_select=settings.num_to_select,
         scratch_dir=td,
         max_secs_per_run=settings.max_solver_seconds,
     )
-    sys.exit(f"Scratch dir is {td}\n")
     output_chosen_anc(
         tree=None,
-        cut_branches_fp=cut_branches_fp,
-        chosen_ancs=final,
-        label_sets_to_freq=rep_selections,
+        cut_branches_fp=settings.cut_branches_fp,
+        chosen_ancs=final_subsets,
     )
     sys.exit("early exit\n")
     print("Selected:\n  {}\n".format("\n  ".join(final)))

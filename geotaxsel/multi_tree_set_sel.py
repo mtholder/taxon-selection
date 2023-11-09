@@ -34,17 +34,59 @@ class ResolutionWrapper(object):
     def size_width(self):
         return 1 + self.max_num - self.min_num
 
+    def pre_cond_check(self):
+        try:
+            assert self.min_num == min(self.by_size.keys())
+            assert self.max_num == max(self.by_size.keys())
+        except:
+            print(f"self.min_num = {self.min_num}")
+            print(f"self.max_num = {self.max_num}")
+            print(f"self.by_size = {self.by_size}")
+            raise
+
     def absorb(self, other, final_n, min_num_after):
-        print(
-            f" enter absorb [{self.min_num}, {self.max_num}], [{other.min_num}, {other.max_num}], {final_n}, {min_num_after}"
-        )
+        # print(
+        #     f" enter absorb [{self.min_num}, {self.max_num}], [{other.min_num}, {other.max_num}], {final_n}, {min_num_after}"
+        # )
+        self.pre_cond_check()
+        other.pre_cond_check()
         nmin = self.min_num + other.min_num
         nmax = self.max_num + other.max_num
         cropped_nmax = min(nmax, final_n - min_num_after)
-        raise NotImplementedError("here")
+
+        o_min = other.min_num
+        o_max = other.max_num
+        nbs = {}
+        for tot in range(nmin, 1 + cropped_nmax):
+            best_score = float("-inf")
+            best_pair_lists = None
+            for this_idx in range(self.min_num, 1 + self.max_num):
+                other_idx = tot - this_idx
+                if other_idx < o_min:
+                    break
+                if other_idx > o_max:
+                    continue
+                s_el = self.by_size.get(this_idx)
+                if s_el is None:
+                    continue
+                o_el = other.by_size.get(other_idx)
+                if o_el is None:
+                    continue
+                s_score, s_subsets = s_el
+                o_score, o_subsets = o_el
+                curr_score = s_score + o_score
+                if curr_score > best_score:
+                    best_score = curr_score
+                    best_pair_lists = (s_subsets, o_subsets)
+            if best_pair_lists is not None:
+                nbs[tot] = (best_score, best_pair_lists[0] + best_pair_lists[1])
+            else:
+                info(f" No size combo added to {tot} !!")
+        self.by_size = nbs
         self.min_num = nmin
         self.max_num = cropped_nmax
-        print(f" exit absorb [{self.min_num}, {self.max_num}]")
+        self.pre_cond_check()
+        # print(f" exit absorb [{self.min_num}, {self.max_num}] by_size len={len(self.by_size)}")
 
 
 PROB_FN = "problems.csv"
@@ -151,7 +193,7 @@ def choose_most_common(num_to_select, scratch_dir, max_secs_per_run=6000):
     for res in in_order:
         total_max += res.max_num
         total_min += res.min_num
-        print(res.min_num, res.max_num, total_min, total_max)
+        # print(res.min_num, res.max_num, total_min, total_max)
 
     if num_to_select < total_min or num_to_select > total_max:
         raise RuntimeError(
@@ -174,35 +216,4 @@ def choose_most_common(num_to_select, scratch_dir, max_secs_per_run=6000):
         else:
             assert res is not final
         final.absorb(res, final_n=num_to_select, min_num_after=min_size_after[idx])
-
-    raise NotImplementedError("Not implemented yet")
-    # with open("cruft/TEMP_REP_SELS.python", "w") as outp:
-    #     outp.write("x = ")
-    #     outp.write(repr(rep_selections))
-    #     outp.write("\n")
-    # lg = LabelGraph()
-    #
-    # for k, v in rep_selections.items():
-    #     lg.add_set(k, v)
-    # lg.write_components("cruft/comp")
-    # sys.exit("early in choose_most_common\n")
-    # lg.write(sys.stdout)
-
-    # crs = dict(rep_selections)
-    # by_freq.sort(reverse=True)
-    # sel_set = set()
-    # sel_leaf_set = set()
-    # for times_sel, label_set in by_freq:
-    #     if not label_set.isdisjoint(sel_leaf_set):
-    #         info(f"  skipping label_set seen {times_sel} times: {label_set}")
-    #         continue
-    #     sel_set.add(label_set)
-    #     sel_leaf_set.update(label_set)
-    #     if len(sel_set) == num_to_select:
-    #         if sel_leaf_set == full_label_set:
-    #             return sel_set
-    #         missing = full_label_set.difference(sel_leaf_set)
-    #         sys.exit(f"Got to {len(sel_set)} while missing {missing}\n")
-    #     if sel_leaf_set == full_label_set:
-    #         sys.exit(f"Covered all leaves in only {len(sel_set)} sets\n")
-    # assert False
+    return final.by_size[num_to_select]

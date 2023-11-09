@@ -187,16 +187,11 @@ def greedy_mmd(tree, num_taxa, sp_by_name):
 def output_chosen_anc(tree, cut_branches_fp, chosen_ancs):
     if not cut_branches_fp:
         return
-    single_mode = True
-    if tree is None:
-        single_mode = False
-        header = "num-leaves\tnum-times-selected\tnames\n"
-    else:
+    single_mode = tree is not None
+    if single_mode:
         header = (
             "dist-to-root\tdist-to-tips\tnum-leaves\tname-or-mrca\tancestral-clade\n"
         )
-
-    if single_mode:
         with open(cut_branches_fp, "w") as outp:
             outp.write(header)
             prod = 1
@@ -219,10 +214,11 @@ def output_chosen_anc(tree, cut_branches_fp, chosen_ancs):
             msg = f"{prod_str}{parens_str} total choices of {len(chosen_ancs)} that maximize PD."
             info(msg)
     else:
+        header = "num-leaves\tnames\n"
         with open(cut_branches_fp, "w") as outp:
             outp.write(header)
-            for k, v in chosen_ancs.items():
+            for k in chosen_ancs:
                 lk = list(k)
                 lk.sort()
                 lf = ", ".join(lk)
-                outp.write(f"{len(lk)}\t{v}\t{lf}\n")
+                outp.write(f"{len(lk)}\t{lf}\n")
