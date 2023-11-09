@@ -5,6 +5,35 @@ import os
 import subprocess
 from .logs import info
 from .label_graph import LabelGraph
+import json
+
+
+class ResolutionWrapper(object):
+    def __init__(self, res_list):
+        assert isinstance(res_list, list)
+        self.min_num = None
+        self.max_num = None
+        self.by_size = {}
+        for res in res_list:
+            score = float(res["score"])
+            assert isinstance(score, float)
+            size = res["size"]
+            assert isinstance(size, int)
+            subsets_list = res["subsets"]
+            fz_list = []
+            for i in subsets_list:
+                assert isinstance(i, list)
+                fz_list.append(frozenset(i))
+            if self.min_num is None or size < self.min_num:
+                self.min_num = size
+            if self.max_num is None or size > self.max_num:
+                self.max_num = size
+            self.by_size[size] = (score, fz_list)
+
+    @property
+    def size_width(self):
+        return 1 + self.max_num - self.min_num
+
 
 PROB_FN = "problems.csv"
 
@@ -64,11 +93,7 @@ def _run_solver_on_all(to_do_list, max_secs_per_run):
         _run_solver(inp, outp, max_secs_per_run=max_secs_per_run)
 
 
-def choose_most_common(num_to_select, scratch_dir, max_secs_per_run=6000):
-    prob_list_fp = os.path.join(scratch_dir, PROB_FN)
-
-    with open(prob_list_fp, "r") as inp:
-        inp_files = [i.strip() for i in inp]
+def _ensure_problems_solved(inp_files, max_secs_per_run):
     to_do_list = []
     all_out_files = []
     for fs in inp_files:
@@ -81,6 +106,44 @@ def choose_most_common(num_to_select, scratch_dir, max_secs_per_run=6000):
 
     if to_do_list:
         _run_solver_on_all(to_do_list, max_secs_per_run=max_secs_per_run)
+    return all_out_files
+
+
+def _process_resolution_files(resolution_files):
+    obj_list = []
+    for fp in resolution_files:
+        with open(fp, "r") as inp:
+            jobj = json.load(inp)
+        obj_list.append(ResolutionWrapper(jobj))
+    return obj_list
+
+
+def choose_most_common(num_to_select, scratch_dir, max_secs_per_run=6000):
+    prob_list_fp = os.path.join(scratch_dir, PROB_FN)
+
+    with open(prob_list_fp, "r") as inp:
+        inp_files = [i.strip() for i in inp]
+
+    resolution_files = _ensure_problems_solved(
+        inp_files, max_secs_per_run=max_secs_per_run
+    )
+
+    res_wrap_list = _process_resolution_files(resolution_files)
+    # Sort by the ones with the smallest variation in size first
+    sortable = [(i.size_width, i.min_num, id(i), i) for i in res_wrap_list]
+    sortable.sort()
+    in_order = [i[-1] for i in sortable]
+    total_min = 0
+    total_max = 0
+    for res in in_order:
+        total_max += res.max_num
+        total_min += res.min_num
+        print(res.min_num, res.max_num, total_min, total_max)
+
+    if num_to_select < total_min or num_to_select > total_max:
+        raise RuntimeError(
+            f"Cannot select {num_to_select} lineages solutions range in [{total_min}, {total_max}]"
+        )
 
     raise NotImplementedError("Not implemented yet")
     # with open("cruft/TEMP_REP_SELS.python", "w") as outp:
