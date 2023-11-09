@@ -14,6 +14,7 @@ from geotaxsel import (
     serialize_problems_for_most_common_choice,
     choose_most_common,
     PROB_FN,
+    calc_dist,
 )
 import dendropy
 
@@ -96,6 +97,103 @@ def create_most_common_groups_probs(
     return rep_selections
 
 
+def min_dist_to_member(loc, loc_set):
+    min_d = float("inf")
+    for i in loc_set:
+        d = calc_dist(i, loc)
+        if d < min_d:
+            min_d = d
+    return min_d
+
+
+def choose_exemplars_by_geo_divergence(settings, geo_ret, final_subsets):
+    chosen_labels = set()
+    labels_to_check = set()
+    label_to_group = {}
+    num_to_select = len(final_subsets)
+    for group in final_subsets:
+        assert len(group) > 0
+        if len(group) == 1:
+            label = list(group)[0]
+            chosen_labels.add(label)
+        else:
+            labels_to_check.update(group)
+            for member in group:
+                label_to_group[member] = group
+    print(f"{len(chosen_labels)} forced choices due to singleton groups.")
+    print(f"{len(labels_to_check)} other labels")
+    # print(chosen_labels)
+    if len(labels_to_check) == 0:
+        return chosen_labels
+
+    sp_by_name = geo_ret[0]
+    # This version of the code only works when there is 1 location
+    #       per taxon
+    for k, v in sp_by_name.items():
+        assert len(v.locations) == 1
+
+    sp_2_loc = {}
+    locs_chosen = set()
+    for label, species in sp_by_name.items():
+        loc = next(iter(species.locations))
+        assert loc is not None
+        if label in chosen_labels:
+            locs_chosen.add(loc)
+        else:
+            sp_2_loc[label] = loc
+    label_2_min_dist = {}
+    max_min_d = float("-inf")
+    next_chosen_label, next_chosen_loc = None, None
+    for md_idx, pair in enumerate(sp_2_loc.items()):
+        sp, loc = pair
+        d = min_dist_to_member(loc, locs_chosen)
+        label_2_min_dist[sp] = d
+        if (md_idx + 1) % 100 == 0:
+            sys.stderr.write(f" ... {sp} ==> min_dist {d}\n")
+        if d > max_min_d:
+            max_min_d = d
+            next_chosen_label = sp
+            next_chosen_loc = loc
+    assert next_chosen_label is not None
+    while True:
+        print(
+            f"Adding {next_chosen_label} with a min_dist of {max_min_d} from a previously chosen taxon"
+        )
+        chosen_labels.add(next_chosen_label)
+        if len(chosen_labels) == num_to_select:
+            break
+        locs_chosen.add(next_chosen_loc)
+        last_added_loc = next_chosen_loc
+        group = label_to_group[next_chosen_label]
+        for el in group:
+            del label_2_min_dist[el]
+        # update next_chosen...
+        next_chosen_label, next_chosen_loc = None, None
+        to_do = list(label_2_min_dist.keys())
+        max_min_d = float("-inf")
+        for sp in to_do:
+            md = label_2_min_dist[sp]
+            dist_to_most_recent = calc_dist(last_added_loc, sp_2_loc[sp])
+            if dist_to_most_recent < md:
+                label_2_min_dist[sp] = dist_to_most_recent
+                md = dist_to_most_recent
+            if md > max_min_d:
+                max_min_d = md
+                next_chosen_label = sp
+                next_chosen_loc = loc
+    group = label_to_group[next_chosen_label]
+    assert len(group) == len(label_2_min_dist)
+
+    for group in final_subsets:
+        sg = set(group)
+        iset = chosen_labels.intersection(sg)
+        liset = len(iset)
+        if liset != 1:
+            print(f"group ({group}) has {liset} members in {chosen_labels}")
+            assert liset == 1
+    return chosen_labels
+
+
 def run_tree_dir(settings):
     geo_ret = parse_geo(
         country_name_fp=settings.country_name_fp,
@@ -134,19 +232,7 @@ def run_tree_dir(settings):
         cut_branches_fp=settings.cut_branches_fp,
         chosen_ancs=final_subsets,
     )
-    chosen_taxa = set()
-    labels_to_check = set()
-    for group in final_subsets:
-        assert len(group) > 0
-        if len(group) == 1:
-            label = list(group)[0]
-            chosen_taxa.add(label)
-        else:
-            labels_to_check.update(group)
-    print(
-        f"{len(chosen_taxa)} forced choices due to singleton groups; {len(labels_to_check)} other labels"
-    )
-    print(chosen_taxa)
+    taxa = choose_exemplars_by_geo_divergence(settings, geo_ret, final_subsets)
     sys.exit("early at the end of run_tree_dir")
     return 0
 
