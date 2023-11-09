@@ -34,6 +34,18 @@ class ResolutionWrapper(object):
     def size_width(self):
         return 1 + self.max_num - self.min_num
 
+    def absorb(self, other, final_n, min_num_after):
+        print(
+            f" enter absorb [{self.min_num}, {self.max_num}], [{other.min_num}, {other.max_num}], {final_n}, {min_num_after}"
+        )
+        nmin = self.min_num + other.min_num
+        nmax = self.max_num + other.max_num
+        cropped_nmax = min(nmax, final_n - min_num_after)
+        raise NotImplementedError("here")
+        self.min_num = nmin
+        self.max_num = cropped_nmax
+        print(f" exit absorb [{self.min_num}, {self.max_num}]")
+
 
 PROB_FN = "problems.csv"
 
@@ -135,6 +147,7 @@ def choose_most_common(num_to_select, scratch_dir, max_secs_per_run=6000):
     in_order = [i[-1] for i in sortable]
     total_min = 0
     total_max = 0
+
     for res in in_order:
         total_max += res.max_num
         total_min += res.min_num
@@ -144,6 +157,23 @@ def choose_most_common(num_to_select, scratch_dir, max_secs_per_run=6000):
         raise RuntimeError(
             f"Cannot select {num_to_select} lineages solutions range in [{total_min}, {total_max}]"
         )
+
+    num_subproblems = len(in_order)
+    min_size_after = [0] * num_subproblems
+    cum_min = 0
+    for idx, res in enumerate(reversed(in_order)):
+        if idx > 0:
+            neg_idx = -(1 + idx)
+            min_size_after[neg_idx] = cum_min
+        cum_min += res.min_num
+
+    final = in_order[0]
+    for idx, res in enumerate(in_order):
+        if idx == 0:
+            continue
+        else:
+            assert res is not final
+        final.absorb(res, final_n=num_to_select, min_num_after=min_size_after[idx])
 
     raise NotImplementedError("Not implemented yet")
     # with open("cruft/TEMP_REP_SELS.python", "w") as outp:
