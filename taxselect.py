@@ -120,8 +120,8 @@ def choose_exemplars_by_geo_divergence(settings, geo_ret, final_subsets):
             labels_to_check.update(group)
             for member in group:
                 label_to_group[member] = group
-    print(f"{len(chosen_labels)} forced choices due to singleton groups.")
-    print(f"{len(labels_to_check)} other labels")
+    # print(f"{len(chosen_labels)} forced choices due to singleton groups.")
+    # print(f"{len(labels_to_check)} other labels")
     # print(chosen_labels)
     if len(labels_to_check) == 0:
         return chosen_labels
@@ -156,9 +156,8 @@ def choose_exemplars_by_geo_divergence(settings, geo_ret, final_subsets):
             next_chosen_loc = loc
     assert next_chosen_label is not None
     while True:
-        print(
-            f"Adding {next_chosen_label} with a min_dist of {max_min_d} from a previously chosen taxon"
-        )
+        m = f"Adding {next_chosen_label} with a min_dist of {max_min_d} from a previously chosen taxon\n"
+        sys.stderr.write(m)
         chosen_labels.add(next_chosen_label)
         if len(chosen_labels) == num_to_select:
             break
@@ -233,8 +232,11 @@ def run_tree_dir(settings):
         chosen_ancs=final_subsets,
     )
     taxa = choose_exemplars_by_geo_divergence(settings, geo_ret, final_subsets)
-    sys.exit("early at the end of run_tree_dir")
-    return 0
+    tl = list(taxa)
+    tl.sort()
+    print(f"The {settings.num_to_select} chosen taxa:")
+    for taxon in tl:
+        print(taxon)
 
 
 def run(settings):
