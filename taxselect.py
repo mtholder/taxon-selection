@@ -134,8 +134,20 @@ def run_tree_dir(settings):
         cut_branches_fp=settings.cut_branches_fp,
         chosen_ancs=final_subsets,
     )
-    sys.exit("early exit\n")
-    print("Selected:\n  {}\n".format("\n  ".join(final)))
+    chosen_taxa = set()
+    labels_to_check = set()
+    for group in final_subsets:
+        assert len(group) > 0
+        if len(group) == 1:
+            label = list(group)[0]
+            chosen_taxa.add(label)
+        else:
+            labels_to_check.update(group)
+    print(
+        f"{len(chosen_taxa)} forced choices due to singleton groups; {len(labels_to_check)} other labels"
+    )
+    print(chosen_taxa)
+    sys.exit("early at the end of run_tree_dir")
     return 0
 
 
