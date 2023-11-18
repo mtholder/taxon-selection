@@ -139,8 +139,12 @@ def choose_exemplars_by_geo_divergence(settings, geo_ret, final_subsets):
         assert loc is not None
         if label in chosen_labels:
             locs_chosen.add(loc)
-        else:
+        elif label in label_to_group:
             sp_2_loc[label] = loc
+        else:
+            sys.stderr.write(
+                f"taxon {label} in sp_by_name, but omitted from sp_2_loc due to absence in tree.\n"
+            )
     label_2_min_dist = {}
     max_min_d = float("-inf")
     next_chosen_label, next_chosen_loc = None, None
