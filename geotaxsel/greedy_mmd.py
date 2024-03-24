@@ -45,6 +45,16 @@ def most_divergent_locs(tax_1, tax_2, sp_by_name):
     return md_pair
 
 
+def min_dist_between_sp(sp_1, sp_2):
+    md = None
+    for loc1 in sp_1.locations:
+        for loc2 in sp_2.locations:
+            d = calc_dist(loc1, loc2)
+            if md is None or d < md:
+                md = d
+    return md
+
+
 def tip_to_root_dist(nd, root):
     t = 0.0
     while nd is not root:
