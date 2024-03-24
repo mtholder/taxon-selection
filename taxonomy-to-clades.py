@@ -1,4 +1,4 @@
-#!/usr/bin/env pyth
+#!/usr/bin/env python
 import sys
 from geotaxsel import read_taxonomy_stream
 
